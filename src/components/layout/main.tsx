@@ -1,12 +1,15 @@
 import { cn } from '@/lib/utils'
+import { SectionTabs } from './section-tabs'
 
 type MainProps = React.HTMLAttributes<HTMLElement> & {
   fixed?: boolean
   fluid?: boolean
+  /** Show the section's tabs above the page. */
+  tabs?: boolean
   ref?: React.Ref<HTMLElement>
 }
 
-export function Main({ fixed, className, fluid, ...props }: MainProps) {
+export function Main({ fixed, className, fluid, tabs = true, children, ...props }: MainProps) {
   return (
     <main
       data-layout={fixed ? 'fixed' : 'auto'}
@@ -22,6 +25,9 @@ export function Main({ fixed, className, fluid, ...props }: MainProps) {
         className
       )}
       {...props}
-    />
+    >
+      {tabs && <SectionTabs />}
+      {children}
+    </main>
   )
 }

@@ -111,7 +111,7 @@ export function AdminMessages({ sessionId }: { sessionId?: string }) {
     <Main>
       <PageHeader
         title='Messages'
-        description='Send email and texts to the families in a program, a single week, or everyone at once. Texts go only to guardians who opted in.'
+        description='Email and text families by team, week or everyone. Texts go to guardians who opted in.'
       />
       {draft && (
         <p className='mb-4 rounded-lg border border-signal/40 bg-signal-soft px-4 py-2.5 text-sm'>

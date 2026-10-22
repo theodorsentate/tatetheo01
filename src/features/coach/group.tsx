@@ -28,6 +28,8 @@ import {
   attendanceRecord,
   dayCounts,
   latestSwimCheck,
+  meetsOn,
+  nextPractice,
   practiceDates,
   STATUS_LABEL,
 } from '@/domain/attendance'
@@ -40,7 +42,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState, FleetChip } from '@/components/burgee/marks'
+import { CALL, Pennant, PracticeCallDialog } from '@/components/burgee/practice'
 import { IncidentDialog } from '@/features/admin/incidents'
+import { BoatsTab, PlanTab, SkillsTab } from './practice-tabs'
 
 const PILL: Record<AttendanceStatus, string> = {
   present: 'bg-secondary text-foreground',
@@ -69,6 +73,10 @@ export function CoachGroup({ groupId }: { groupId: string }) {
   const [signingOut, setSigningOut] = useState<Sailor | null>(null)
   const [swimFor, setSwimFor] = useState<{ sailor: Sailor; thenLaunch: boolean } | null>(null)
   const [reporting, setReporting] = useState(false)
+  const [tab, setTab] = useState<'roster' | 'plan' | 'boats' | 'skills'>('roster')
+  const [calling, setCalling] = useState(false)
+  const role = useStore((s) => s.coaches.find((c) => c.id === PERSONAS.coachId)?.role)
+  const calls = useStore((s) => s.practiceCalls)
 
   const group = groups.find((g) => g.id === groupId)
   const session = group ? look.session.get(group.sessionId) : undefined
@@ -96,6 +104,8 @@ export function CoachGroup({ groupId }: { groupId: string }) {
   const dates = practiceDates(session, now)
   const swimOk = (sid: string) => latestSwimCheck(swimChecks, sid)?.result === 'passed'
   const coaches = group.coachIds.map((id) => look.coach.get(id)?.name).filter(Boolean)
+  const call = calls.find((c) => c.sessionId === session.id && c.date === today)
+  const planDate = nextPractice(session, now) ?? today
 
   const launch = (ids: string[]) => {
     const ok = ids.filter(swimOk)
@@ -125,9 +135,50 @@ export function CoachGroup({ groupId }: { groupId: string }) {
           {kids.length} sailors with {coaches.join(' & ') || 'no coach'}
           {group.resource ? `, ${group.resource}` : ''}
         </p>
+        {live && meetsOn(session, now) && (
+          <div className={cn('mt-3 flex items-center gap-3 rounded-lg px-3 py-2', call ? CALL[call.status].soft : 'bg-muted')}>
+            <Pennant status={call?.status ?? 'none'} className='h-5 w-7' />
+            <span className='min-w-0 flex-1 text-sm'>
+              <span className={cn('block font-semibold', call && CALL[call.status].text)}>{call ? CALL[call.status].sentence : 'No call yet today'}</span>
+              {call?.note && <span className='block truncate text-xs text-muted-foreground'>{call.note}</span>}
+            </span>
+            {(role === 'head-coach' || role === 'program-director') && (
+              <Button size='sm' variant='outline' className='bg-card' onClick={() => setCalling(true)}>
+                Change
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
-      {live && (
+      <div className='sticky top-0 z-10 mt-4 border-b bg-background/95 px-2 backdrop-blur' role='tablist' aria-label='Group'>
+        <div className='flex'>
+          {(
+            [
+              ['roster', 'Roster'],
+              ['plan', 'Plan'],
+              ['boats', 'Boats'],
+              ['skills', 'Skills'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              role='tab'
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={cn('-mb-px flex-1 border-b-2 py-2.5 text-sm font-medium', tab === id ? 'border-brass text-heading' : 'border-transparent text-muted-foreground')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'plan' && <PlanTab session={session} group={group} date={planDate} coachName={coachName} />}
+      {tab === 'boats' && <BoatsTab session={session} group={group} />}
+      {tab === 'skills' && <SkillsTab session={session} group={group} coachId={PERSONAS.coachId} coachName={coachName} />}
+
+      {tab === 'roster' && live && (
         <section aria-label='Attendance today' className='mt-4 px-4'>
           <SafetyBanner counts={counts} total={kids.length} />
           <dl className='mt-3 grid grid-cols-4 gap-1 text-center'>
@@ -162,7 +213,7 @@ export function CoachGroup({ groupId }: { groupId: string }) {
             <Button variant='outline' onClick={() => setCompose('message')}>
               <Megaphone className='size-4' /> Message parents
             </Button>
-            <Button variant='outline' onClick={() => setCompose('weather')}>
+            <Button variant='outline' onClick={() => setCalling(true)}>
               <CloudLightning className='size-4' /> Weather call
             </Button>
             <Button variant='ghost' className='col-span-2 text-muted-foreground' onClick={() => setReporting(true)}>
@@ -172,6 +223,7 @@ export function CoachGroup({ groupId }: { groupId: string }) {
         </section>
       )}
 
+      {tab === 'roster' && (
       <ul className='mt-4 divide-y border-y bg-card'>
         {kids.map((k) => {
           const e = entry(k.id)
@@ -204,7 +256,7 @@ export function CoachGroup({ groupId }: { groupId: string }) {
                       <HeartPulse className='size-4 shrink-0' /> {k.medicalAlerts.join(', ')}
                     </p>
                   )}
-                  {program.activity !== 'tennis' && swim?.result !== 'passed' && (
+                  {swim?.result !== 'passed' && (
                     <p className='flex items-center gap-1.5 text-xs font-medium text-signal'>
                       <LifeBuoy className='size-3.5 shrink-0' /> Swim check needed
                     </p>
@@ -245,14 +297,22 @@ export function CoachGroup({ groupId }: { groupId: string }) {
                   }
                   onSwim={() => setSwimFor({ sailor: k, thenLaunch: false })}
                   record={rec}
-                  showSwim={program.activity !== 'tennis'}
+                  showSwim
                 />
               )}
             </li>
           )
         })}
       </ul>
+      )}
 
+      <PracticeCallDialog
+        open={calling}
+        onClose={() => setCalling(false)}
+        sessions={[session]}
+        initial={{ status: call?.status === 'cancelled' ? 'on' : 'cancelled', sessionIds: [session.id] }}
+        by={coachName}
+      />
       <SignOutSheet
         sailor={signingOut}
         onClose={() => setSigningOut(null)}

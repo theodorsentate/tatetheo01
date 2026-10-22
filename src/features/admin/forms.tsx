@@ -60,7 +60,7 @@ export function AdminForms() {
     <Main>
       <PageHeader
         title='Forms & waivers'
-        description={`Every registered sailor needs these signed once for the ${season} season. Parents sign from their phone; coaches see medical details on the roster.`}
+        description={`Signed once per sailor for the ${season} season, from the parent’s phone.`}
         actions={
           <>
             <Button

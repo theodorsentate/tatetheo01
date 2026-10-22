@@ -67,7 +67,7 @@ export function AdminCalendar() {
     <Main>
       <PageHeader
         title='Calendar'
-        description='Practices and camp weeks come straight from your programs. Add regattas, deadlines, meetings and socials so staff and families see the whole season.'
+        description='Practices come from your programs. Add everything else here.'
         actions={
           <Button onClick={() => setAdding(true)}>
             <Plus className='size-4' /> Add event

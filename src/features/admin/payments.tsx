@@ -65,7 +65,7 @@ export function AdminPayments() {
 
   return (
     <Main>
-      <PageHeader title='Payments' description='Card payments come in through registration automatically. Record checks and cash here so balances stay right.' />
+      <PageHeader title='Payments' description='Card payments arrive on their own. Record checks and cash here.' />
       <div className='mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'>
         <div className='rounded-lg border bg-card p-4'>
           <p className='text-sm text-muted-foreground'>Collected, all terms</p>

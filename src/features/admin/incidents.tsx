@@ -47,7 +47,7 @@ export function AdminIncidents() {
     <Main>
       <PageHeader
         title='Incident reports'
-        description='Capsizes that needed help, injuries, near misses and equipment failures. Coaches can file from the dock; you follow up and close them here.'
+        description='Coaches file from the dock. You follow up and close them here.'
         actions={
           <Button onClick={() => setLogging(true)}>
             <Plus className='size-4' /> Log an incident

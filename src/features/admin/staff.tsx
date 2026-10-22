@@ -27,8 +27,6 @@ export const ROLE_LABEL: Record<StaffRole, string> = {
   'head-coach': 'Head coach',
   instructor: 'Instructor',
   assistant: 'Assistant instructor',
-  'swim-coach': 'Swim coach',
-  'tennis-pro': 'Tennis pro',
 }
 
 const cellTone: Record<CertStatus, string> = {
@@ -67,7 +65,7 @@ export function AdminStaff() {
     <Main>
       <PageHeader
         title='Certifications'
-        description={`Burgee flags anything expiring within ${warn} days. Coaches with an expired or missing required certification show a warning on every roster they are on.`}
+        description={`Flags anything expiring within ${warn} days.`}
       />
       <div className='mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm'>
         <span>

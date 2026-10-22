@@ -1,54 +1,46 @@
 import { useMemo } from 'react'
-import { Link } from '@tanstack/react-router'
-import { CERT_TYPES, FORM_TEMPLATES } from '@/data/catalog'
+import { Link, useLocation } from '@tanstack/react-router'
+import { CERT_TYPES } from '@/data/catalog'
 import { useNow } from '@/data/hooks'
 import { useStore } from '@/data/store'
-import { ACTIVE_STATUSES } from '@/domain/pricing'
-import { coachCertRows, coachCertSummary, outstandingForms } from '@/domain/rules'
+import { coachCertRows, coachCertSummary } from '@/domain/rules'
 import { useLayout } from '@/context/layout-provider'
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { BurgeeMark } from '@/components/burgee/marks'
 import { RoleSwitcher } from '@/components/burgee/role-switcher'
-import { adminNav } from './data/sidebar-data'
-import { NavGroup } from './nav-group'
+import { SECTIONS, sectionFor } from './data/sidebar-data'
 
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
-  const regs = useStore((s) => s.registrations)
   const coaches = useStore((s) => s.coaches)
-  const sailors = useStore((s) => s.sailors)
-  const submissions = useStore((s) => s.submissions)
   const settings = useStore((s) => s.settings)
   const incidents = useStore((s) => s.incidents)
   const boats = useStore((s) => s.boats)
-  const documents = useStore((s) => s.documents)
   const now = useNow(60_000)
 
-  const nav = useMemo(() => {
-    const active = new Set(regs.filter((r) => ACTIVE_STATUSES.has(r.status)).map((r) => r.sailorId))
-    return adminNav({
-      waitlist: regs.filter((r) => r.status === 'waitlisted').length,
-      certIssues: coaches.filter(
-        (c) => coachCertSummary(coachCertRows(c, CERT_TYPES, now, settings.certWarningDays)) !== 'valid'
-      ).length,
-      outstandingForms: sailors.filter(
-        (s) => active.has(s.id) && outstandingForms(s, FORM_TEMPLATES, submissions, settings.season).length > 0
-      ).length,
-      openIncidents: incidents.filter((i) => i.status === 'open').length,
-      boatIssues: boats.filter((b) => b.status !== 'ready').length,
-      missingDocs: coaches.reduce(
-        (n, c) => n + c.certs.filter((cert) => !documents.some((d) => d.coachId === c.id && d.certTypeId === cert.certTypeId)).length,
-        0
-      ),
-    })
-  }, [regs, coaches, sailors, submissions, settings, now, incidents, boats, documents])
+  const pathname = useLocation({ select: (l) => l.pathname })
+  const current = sectionFor(pathname)
+  const { setOpenMobile } = useSidebar()
 
+  // Only flag sections where something is actually wrong.
+  const badges = useMemo<Record<string, number>>(() => {
+    return {
+      staff: coaches.filter((c) => coachCertSummary(coachCertRows(c, CERT_TYPES, now, settings.certWarningDays)) !== 'valid').length,
+      messages: incidents.filter((i) => i.status === 'open').length,
+      club: boats.filter((b) => b.status !== 'ready').length,
+    }
+  }, [coaches, settings, now, incidents, boats])
   return (
     <Sidebar collapsible={collapsible} variant={variant}>
       <SidebarHeader className='px-3 pt-4'>
@@ -61,9 +53,25 @@ export function AppSidebar() {
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        {nav.map((props) => (
-          <NavGroup key={props.title} {...props} />
-        ))}
+        <SidebarGroup className='pt-4'>
+          <SidebarMenu className='gap-1'>
+            {SECTIONS.map((sec) => (
+              <SidebarMenuItem key={sec.id}>
+                <SidebarMenuButton asChild size='lg' isActive={current?.id === sec.id} tooltip={sec.title} className='h-10 text-[15px]'>
+                  <Link to={sec.url} onClick={() => setOpenMobile(false)}>
+                    <sec.icon />
+                    <span>{sec.title}</span>
+                    {!!badges[sec.id] && (
+                      <span className='ms-auto rounded-full bg-signal/15 px-1.5 text-[11px] font-semibold text-signal' aria-label={`${badges[sec.id]} need attention`}>
+                        {badges[sec.id]}
+                      </span>
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className='border-t border-sidebar-border group-data-[collapsible=icon]:hidden'>
         <RoleSwitcher className='w-full' />

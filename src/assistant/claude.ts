@@ -17,6 +17,9 @@ import {
   familyInfo,
   attendanceInfo,
   calendarInfo,
+  practiceTodayInfo,
+  progressInfo,
+  regattasInfo,
   documentsInfo,
   equipmentInfo,
   incidentsInfo,
@@ -94,6 +97,9 @@ const LABELS: Record<string, string> = {
   staff_directory: 'Looking up staff',
   documents: 'Searching documents',
   calendar: 'Checking the calendar',
+  regattas: 'Checking regatta sign-ups',
+  practice_today: 'Checking today’s practice calls',
+  progress: 'Checking skills and evaluations',
   equipment: 'Checking boats',
   incidents: 'Reading incident reports',
   draft_message: 'Drafting a message',
@@ -108,7 +114,7 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
     {
       name: 'staff_certifications',
       description:
-        'Coach and staff certifications (SafeSport, First Aid & CPR, Background Check, US Sailing Level 1/2, Safe Powerboat, Lifeguard, PTR). Returns rows of staff, cert, status (valid/expiring/expired/missing), expiry, daysLeft. Default returns only those needing action.',
+        'Coach and staff certifications (SafeSport, First Aid & CPR, Background Check, US Sailing Level 1/2, Safe Powerboat). Returns rows of staff, cert, status (valid/expiring/expired/missing), expiry, daysLeft. Default returns only those needing action.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -217,6 +223,23 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
       execute: wrap('calendar', (i) => calendarInfo(ctxNow(), { days: i.days ? Number(i.days) : undefined, kind: str(i.kind), search: str(i.search) })),
     },
     {
+      name: 'regattas',
+      description: 'Upcoming regattas with the sailors whose families said going, interested or not going, who has not answered, chaperones and coaches. Optional search (e.g. "frostbite").',
+      inputSchema: { type: 'object', properties: { search: { type: 'string' } } },
+      execute: wrap('regattas', (i) => regattasInfo(ctxNow(), { search: str(i.search) })),
+    },
+    {
+      name: 'practice_today',
+      description: 'Each team practicing today: the call (on, delayed, cancelled or no call yet), the note sent to families, and the lesson plan.',
+      execute: wrap('practice_today', () => practiceTodayInfo(ctxNow())),
+    },
+    {
+      name: 'progress',
+      description: 'Skill progress and coach evaluations for fall team sailors: skills got / total, ready to move up, working on, evaluation status. Filter by program or sailor name (sailor returns the evaluation text).',
+      inputSchema: { type: 'object', properties: { program: { type: 'string' }, sailor: { type: 'string' } } },
+      execute: wrap('progress', (i) => progressInfo(ctxNow(), { program: str(i.program), sailor: str(i.sailor) })),
+    },
+    {
       name: 'equipment',
       description: 'Boats and coach boats: status (ready, needs-repair, out-of-service), issue, who uses it, last checked. Default returns only boats that need work.',
       inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['all', 'ready', 'needs-repair', 'out-of-service'] }, kind: { type: 'string' } } },
@@ -259,7 +282,7 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
 }
 
 export function instructions(ctx: Ctx) {
-  return `You are "Ask Burgee", the assistant inside Burgee, the junior program software at ${ctx.s.settings.clubName}. You are talking with the junior program director. Answer their off-the-cuff questions about the club's junior sailing, swim and tennis programs.
+  return `You are "Ask Burgee", the assistant inside Burgee, the junior program software at ${ctx.s.settings.clubName}. You are talking with the junior program director. Answer their off-the-cuff questions about the club's junior sailing program.
 
 Rules:
 - Use the tools to look things up. Never guess names, dates, counts or money; if the data doesn't cover it, say so in one line.

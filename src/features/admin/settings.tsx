@@ -101,7 +101,7 @@ export function AdminSettings({ tab = 'pricing' }: { tab?: string }) {
 
   return (
     <Main>
-      <PageHeader title='Settings' description='Club-wide rules. Changes apply to new registrations immediately; existing registrations keep the price they were booked at.' />
+      <PageHeader title='Settings' description='Changes apply to new registrations. Existing ones keep their price.' />
       <Tabs value={tab} onValueChange={(v) => navigate({ to: '/admin/settings', search: { tab: v } })}>
         <TabsList>
           <TabsTrigger value='pricing'>Pricing</TabsTrigger>

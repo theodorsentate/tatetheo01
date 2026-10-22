@@ -23,8 +23,6 @@ export const LEVELS: Record<Level, { label: string; short: string; color: string
   'opti-blue': { label: 'Opti Blue', short: 'Blue', color: '#2563eb' },
   'club-420': { label: 'Club 420', short: '420', color: '#7c3aed' },
   ilca: { label: 'ILCA', short: 'ILCA', color: '#ea580c' },
-  swim: { label: 'Swim', short: 'Swim', color: '#06b6d4' },
-  tennis: { label: 'Tennis', short: 'Tennis', color: '#ca8a04' },
 }
 
 /* ─────────────────────── Eligibility ─────────────────────── */
@@ -46,8 +44,6 @@ export function eligibility(
       ok: false,
       reason: `Ages ${program.minAge}–${program.maxAge} (${sailor.firstName} will be ${age})`,
     }
-  // Swim and tennis are open to any junior in the age band.
-  if (program.activity !== 'sailing') return { ok: true }
   if (!program.levels.includes(sailor.level))
     return {
       ok: false,

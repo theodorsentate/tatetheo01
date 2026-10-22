@@ -23,8 +23,8 @@ export function AdminPrograms() {
   return (
     <Main>
       <PageHeader
-        title='Programs & sessions'
-        description='Every camp week and team season the club runs. Change capacity here and the waitlist re-runs immediately: new seats go to the next family in line.'
+        title='Programs'
+        description='Raise capacity and new seats go straight to the waitlist.'
         actions={
           <Button asChild variant='outline'>
             <Link to='/admin/settings'>Edit pricing</Link>

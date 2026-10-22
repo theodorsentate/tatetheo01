@@ -19,6 +19,8 @@ import {
 } from '@/domain/rules'
 import type { Audience, Channel, ClubSettings, Level, Session } from '@/domain/types'
 import { waitlistFor } from '@/domain/waitlist'
+import { eligibleSailors, regattaSummary, termForDate } from '@/domain/regattas'
+import { SKILLS, TRACKS, trackFor } from '@/data/curriculum'
 import { attendanceKey, attendanceRecord, dayCounts, latestSwimCheck, meetsOn, practiceDates, requestProgress, STATUS_LABEL } from '@/domain/attendance'
 
 export type ClubSnapshot = DemoState & { settings: ClubSettings }
@@ -45,8 +47,6 @@ const PROGRAM_ALIASES: [RegExp, string[]][] = [
   [/\brwb\b|opti\s*race|\brace\b/, ['rwb-camp', 'rwb-team']],
   [/420/, ['420-camp', '420-team']],
   [/ilca|laser/, ['ilca-camp', 'ilca-team']],
-  [/swim/, ['swim']],
-  [/tennis/, ['tennis']],
 ]
 
 /** Program ids a phrase refers to ("green camp", "420", "race team"…). */
@@ -154,11 +154,9 @@ const CERT_ALIASES: [RegExp, string][] = [
   [/safe\s*sport/, 'safesport'],
   [/first\s*aid|cpr|aed/, 'fa'],
   [/background/, 'bg'],
-  [/life\s*guard/, 'lifeguard'],
   [/power\s*boat|safe\s*power|\bpwr\b|boat\s*handling/, 'pwr'],
   [/level\s*2|\bl2\b|race\s*coach/, 'l2'],
   [/level\s*1|\bl1\b|instructor\s*cert/, 'l1'],
-  [/ptr|uspta|tennis\s*cert/, 'ptr'],
 ]
 export function matchCert(text?: string): string | undefined {
   if (!text) return undefined
@@ -469,7 +467,7 @@ export function attendanceInfo(ctx: Ctx, q: { program?: string; term?: string; w
 /** Registered sailors (in water programs) without a passed swim check. */
 export function swimChecksInfo(ctx: Ctx, q: { program?: string; term?: string; week?: string | number }) {
   const { s } = ctx
-  const sessionIds = new Set((q.program || q.term || q.week ? findSessions(ctx, q) : s.sessions).filter((x) => programById.get(x.programId)!.activity !== 'tennis').map((x) => x.id))
+  const sessionIds = new Set((q.program || q.term || q.week ? findSessions(ctx, q) : s.sessions).map((x) => x.id))
   const ids = new Set(s.registrations.filter((r) => ACTIVE_STATUSES.has(r.status) && sessionIds.has(r.sessionId)).map((r) => r.sailorId))
   const rows = [...ids]
     .map((id) => s.sailors.find((k) => k.id === id)!)
@@ -613,6 +611,98 @@ export function incidentsInfo(ctx: Ctx, q: { status?: string }) {
       })),
     incidentsPage: '/admin/incidents',
   }
+}
+
+/** Regattas with who's going, interested, not answered, and chaperones. */
+export function regattasInfo(ctx: Ctx, q: { search?: string }) {
+  const { s } = ctx
+  const today = format(ctx.now, 'yyyy-MM-dd')
+  const name = (id: string) => {
+    const k = s.sailors.find((x) => x.id === id)
+    return k ? `${k.firstName} ${k.lastName}` : ''
+  }
+  const list = s.regattas
+    .map((r) => ({ r, e: s.calendar.find((e) => e.id === r.eventId)! }))
+    .filter((x) => x.e && (x.e.endDate ?? x.e.date) >= today)
+    .filter((x) => !q.search || x.e.title.toLowerCase().includes(q.search.toLowerCase()) || q.search.toLowerCase().split(/\s+/).some((w) => w.length > 3 && x.e.title.toLowerCase().includes(w)))
+    .sort((a, b) => a.e.date.localeCompare(b.e.date))
+  return {
+    regattas: list.map(({ r, e }) => {
+      const term = termForDate(TERMS, e.date)
+      const eligible = eligibleSailors(r, s.sailors, s.registrations, s.sessions, term.id)
+      const sum = regattaSummary(e.id, eligible, s.regattaResponses)
+      return {
+        id: e.id,
+        title: e.title,
+        date: `${format(new Date(`${e.date}T12:00:00`), 'EEE MMM d')}${e.endDate ? `–${d(e.endDate)}` : ''}`,
+        location: e.location,
+        fleets: r.levels.map((l) => LEVELS[l].label),
+        entryDeadline: r.entryDeadline ? d(r.entryDeadline) : undefined,
+        going: sum.going.map((x) => name(x.sailorId)),
+        interested: sum.interested.map((x) => name(x.sailorId)),
+        notGoing: sum.notGoing.map((x) => name(x.sailorId)),
+        noAnswer: sum.noAnswer.map((k) => `${k.firstName} ${k.lastName}`),
+        chaperones: `${sum.chaperones.length} of ${r.chaperonesNeeded} (${sum.chaperones.map((c) => c.by).join(', ') || 'none yet'})`,
+        coaches: r.coachIds.map((id) => s.coaches.find((c) => c.id === id)?.name).filter(Boolean),
+        page: `/admin/regattas?regatta=${e.id}`,
+      }
+    }),
+  }
+}
+
+/** Today's practice calls (on / delayed / cancelled) for every team that meets today. */
+export function practiceTodayInfo(ctx: Ctx) {
+  const { s } = ctx
+  const today = format(ctx.now, 'yyyy-MM-dd')
+  const meeting = s.sessions.filter((x) => meetsOn(x, ctx.now))
+  return {
+    date: format(ctx.now, 'EEEE, MMMM d'),
+    teams: meeting.map((x) => {
+      const call = s.practiceCalls.find((c) => c.sessionId === x.id && c.date === today)
+      const plan = s.lessonPlans.find((p) => p.sessionId === x.id && p.date === today)
+      return {
+        team: programById.get(x.programId)?.name,
+        time: x.time.split('·')[0].replace('Weekdays ', '').trim(),
+        call: call ? call.status : 'no call yet',
+        note: call?.note,
+        calledBy: call?.by,
+        lessonPlan: plan ? `${plan.title} (${plan.by})` : 'none yet',
+      }
+    }),
+    homePage: '/admin',
+  }
+}
+
+/** Skill progress and evaluations by team: who's ready to move up, who has no evaluation. */
+export function progressInfo(ctx: Ctx, q: { program?: string; sailor?: string }) {
+  const { s } = ctx
+  const programs = matchPrograms(q.program)
+  const sessions = s.sessions.filter((x) => x.termId === 'fall-26' && (!programs.length || programs.includes(x.programId)))
+  const rows = sessions.flatMap((se) =>
+    s.registrations
+      .filter((r) => r.sessionId === se.id && r.status === 'confirmed')
+      .map((r) => s.sailors.find((k) => k.id === r.sailorId)!)
+      .filter((k) => k && (!q.sailor || `${k.firstName} ${k.lastName}`.toLowerCase().includes(q.sailor.toLowerCase())))
+      .map((k) => {
+        const track = trackFor(k.level)
+        const list = SKILLS.filter((x) => x.track === track)
+        const mine = s.skillMarks.filter((m) => m.sailorId === k.id)
+        const got = list.filter((x) => mine.some((m) => m.skillId === x.id && m.status === 'got-it'))
+        const working = list.filter((x) => mine.some((m) => m.skillId === x.id && m.status === 'working'))
+        const ev = s.evaluations.filter((e) => e.sailorId === k.id && e.sessionId === se.id).sort((a, b) => b.date.localeCompare(a.date))[0]
+        return {
+          sailor: `${k.firstName} ${k.lastName}`,
+          team: programById.get(se.programId)?.name,
+          track: TRACKS[track].name,
+          skills: `${got.length} of ${list.length}`,
+          readyToMoveUp: got.length === list.length,
+          workingOn: working.map((x) => x.name),
+          evaluation: ev ? (ev.shared ? `shared ${d(ev.date)}` : 'draft') : 'not written',
+          evaluationText: q.sailor && ev ? { strengths: ev.strengths, workOn: ev.workOn, nextStep: ev.nextStep } : undefined,
+        }
+      })
+  )
+  return { rows, progressPage: '/admin/progress' }
 }
 
 /** Live "needs attention" list — the same items the Today page shows. */

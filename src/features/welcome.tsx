@@ -6,19 +6,19 @@ import { ROLES } from '@/components/burgee/role-switcher'
 
 const TRY: Record<string, string[]> = {
   director: [
+    'Call off today’s practice and text every family in one tap.',
+    'See who’s going to the Fall Championship and who needs a chaperone.',
     'Ask Burgee “who still needs their SafeSport?”',
-    'Send a regatta permission slip to every Green Team family.',
-    'Raise a full week’s capacity and watch the waitlist offer spots.',
   ],
   coach: [
-    'Take attendance for today’s Green Team: check in, launch, everyone ashore.',
-    'Run a swim check before a sailor can launch.',
-    'Sign a sailor out to an approved pickup.',
+    'Take attendance for the Green Team, from check-in to pickup.',
+    'Open today’s plan and assign boats.',
+    'Tick off Hazel’s skills and write her evaluation.',
   ],
   family: [
-    'Claim Finn’s waitlist spot before the hold runs out.',
-    'Sign the permission slip the club just sent.',
-    'Leave a note for Hazel’s coaches and add Grandma as a pickup.',
+    'See if practice is on and whether Finn is on the water.',
+    'Tell the coaches Hazel is going to the Turkey Bowl.',
+    'Read Finn’s evaluation from his coach.',
   ],
 }
 
@@ -58,21 +58,31 @@ function DressingLine() {
 /** Small product glimpses so each door shows what's behind it. */
 function Glimpse({ role }: { role: string }) {
   if (role === 'director') {
-    const fills = [
-      [0.3, 0.5, 1, 1, 0.6, 0.4],
-      [0.2, 0.4, 1, 1, 0.5, 0.3],
-      [0.4, 0.6, 1, 0.9, 1, 0.5],
-    ]
     return (
-      <div className='grid grid-cols-6 gap-1' aria-hidden='true'>
-        {fills.flatMap((row, r) =>
-          row.map((f, c) => (
-            <div key={`${r}${c}`} className='relative h-7 overflow-hidden rounded-[4px] border border-border bg-card'>
-              <div className='absolute inset-x-0 bottom-0 bg-primary/15' style={{ height: `${f * 100}%` }} />
-              {f === 1 && (r + c) % 2 === 0 && <span className='absolute end-1 top-1 size-1.5 rounded-full bg-signal' />}
-            </div>
-          ))
-        )}
+      <ul className='space-y-1.5' aria-hidden='true'>
+        {[
+          ['Opti Green Team', 'On'],
+          ['Opti Race Team', 'On'],
+        ].map(([n, st]) => (
+          <li key={n} className='flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-xs'>
+            <span className='font-medium text-foreground'>{n}</span>
+            <span className='flex gap-1 text-[10px]'>
+              <span className='rounded bg-ok-soft px-1.5 py-0.5 font-medium text-ok'>{st}</span>
+              <span className='px-1.5 py-0.5 text-muted-foreground'>Delayed</span>
+              <span className='px-1.5 py-0.5 text-muted-foreground'>Cancelled</span>
+            </span>
+          </li>
+        ))}
+        <li className='rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground'>Fall Championship: 22 going, 3 interested</li>
+      </ul>
+    )
+  }
+  if (role === 'family') {
+    return (
+      <div className='rounded-md border border-ok/30 bg-ok-soft p-2.5 text-xs' aria-hidden='true'>
+        <p className='font-display text-sm font-semibold text-ok'>Practice is on</p>
+        <p className='mt-0.5 text-foreground'>Opti Race Team, 3:45–6:00 PM</p>
+        <p className='mt-2 rounded bg-signal-soft px-2 py-1 font-medium text-signal'>Finn is on the water (since 4:02)</p>
       </div>
     )
   }
@@ -93,13 +103,7 @@ function Glimpse({ role }: { role: string }) {
       </ul>
     )
   }
-  return (
-    <div className='rounded-md border border-signal/40 bg-signal-soft p-2.5 text-xs' aria-hidden='true'>
-      <p className='font-semibold text-signal'>Spot opened, 30h left</p>
-      <p className='mt-0.5 text-foreground'>Finn got off the waitlist for Race Camp, Week 5</p>
-      <div className='mt-2 h-6 rounded bg-primary' />
-    </div>
-  )
+  return null
 }
 
 export function Welcome() {
@@ -123,11 +127,10 @@ export function Welcome() {
         </div>
       </div>
       <main className='mx-auto max-w-6xl px-4 pb-16 sm:px-8'>
-        <h1 className='max-w-[18ch] text-4xl leading-[1.05] font-semibold sm:text-6xl'>Junior programs, run from one place.</h1>
+        <h1 className='max-w-[18ch] text-4xl leading-[1.05] font-semibold sm:text-6xl'>Your junior sailing program, in one place.</h1>
         <p className='mt-5 max-w-[60ch] text-base leading-relaxed text-muted-foreground sm:text-lg'>
-          Registration, waitlists, rosters, attendance, coach certifications, waivers and parent messages for yacht club junior
-          sailing, swim and tennis. This demo is a made-up club in late October: fall race teams are on the water and summer
-          registration opened three weeks ago.
+          Practice calls, attendance, lesson plans, skills, regattas, forms and payments, shared by the program director,
+          coaches and parents. This demo is a made-up club on a Thursday in late October: two fall teams practice this afternoon.
         </p>
 
         <h2 className='mt-12 mb-4 text-sm font-medium text-muted-foreground'>Pick a seat</h2>

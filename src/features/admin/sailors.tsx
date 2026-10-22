@@ -60,7 +60,7 @@ export function SailorsDirectory() {
 
   return (
     <Main>
-      <PageHeader title='Sailors' description={`Every junior at the club: ${sailors.length} sailors across ${new Set(sailors.map((s) => s.familyId)).size} families.`} />
+      <PageHeader title='Sailors' description={`${sailors.length} sailors in ${new Set(sailors.map((s) => s.familyId)).size} families.`} />
       <div className='mb-3 flex flex-wrap items-center gap-2'>
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder='Search sailor or family' className='h-9 w-60' aria-label='Search sailors' />
         <Select value={level} onValueChange={setLevel}>
@@ -69,9 +69,7 @@ export function SailorsDirectory() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value='all'>All fleets</SelectItem>
-            {(Object.keys(LEVELS) as Level[])
-              .filter((l) => l !== 'swim' && l !== 'tennis')
-              .map((l) => (
+            {(Object.keys(LEVELS) as Level[]).map((l) => (
                 <SelectItem key={l} value={l}>
                   {LEVELS[l].label}
                 </SelectItem>

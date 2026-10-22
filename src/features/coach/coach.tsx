@@ -35,6 +35,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { CertStatusLabel, EmptyState } from '@/components/burgee/marks'
+import { CALL, Pennant } from '@/components/burgee/practice'
 
 function useCoach() {
   const coaches = useStore((s) => s.coaches)
@@ -164,6 +165,8 @@ function GroupCard({
 }) {
   const look = useLookups()
   const attendance = useStore((s) => s.attendance)
+  const calls = useStore((s) => s.practiceCalls)
+  const plans = useStore((s) => s.lessonPlans)
   const now = useNow()
   const session = look.session.get(group.sessionId)!
   const program = programById.get(session.programId)!
@@ -184,6 +187,19 @@ function GroupCard({
         params={{ groupId: group.id }}
         className='block overflow-hidden rounded-lg border bg-card'
       >
+        {featured && (() => {
+          const call = calls.find((c) => c.sessionId === session.id && c.date === today)
+          const plan = plans.find((p) => p.sessionId === session.id && p.date === today)
+          return (
+            <span className={cn('flex items-center gap-3 border-b px-4 py-2.5', call ? CALL[call.status].soft : 'bg-muted')}>
+              <Pennant status={call?.status ?? 'none'} className='h-5 w-7' />
+              <span className='min-w-0 flex-1'>
+                <span className={cn('block text-sm font-semibold', call && CALL[call.status].text)}>{call ? CALL[call.status].sentence : 'No call yet'}</span>
+                <span className='block truncate text-xs text-muted-foreground'>{plan ? `Plan: ${plan.title}` : 'No plan yet'}</span>
+              </span>
+            </span>
+          )
+        })()}
         <span className={cn('flex gap-3 p-3', featured && 'p-4')}>
           <span
             className='w-1 shrink-0 rounded-full'

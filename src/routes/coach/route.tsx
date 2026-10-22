@@ -17,11 +17,10 @@ export const Route = createFileRoute('/coach')({
             <>
               <p>Built for the dock: big buttons, one hand, bright sun.</p>
               <p>
-                Coaches take attendance as sailors arrive, launch them, and bring everyone ashore with a live count of
-                who is still on the water. Nobody launches without a passed swim check, and sailors only go home with
-                someone on their family’s pickup list.
+                Roster takes attendance from arrival to pickup, with a live count of who is on the water. Plan holds
+                today’s practice. Boats assigns hulls and coach boats. Skills is where coaches tick off what each sailor
+                can do and write the evaluation parents read.
               </p>
-              <p>Allergies, parent notes and a tap-to-call for every guardian sit right on the roster.</p>
             </>
           ),
         }}

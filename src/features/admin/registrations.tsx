@@ -85,7 +85,7 @@ export function AdminRegistrations({ status = 'all' }: { status?: string }) {
     <Main>
       <PageHeader
         title='Registrations'
-        description='Every sign-up across camps and teams. Cancelling a confirmed seat re-runs that session’s waitlist right away.'
+        description='Cancelling a seat offers it to the next family on the waitlist.'
       />
       <div className='mb-4 flex flex-wrap gap-1 rounded-lg bg-muted p-1' role='tablist' aria-label='Status'>
         {STATUS_TABS.map((t) => (

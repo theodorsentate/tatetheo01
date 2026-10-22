@@ -43,7 +43,7 @@ export function AttendanceOverview() {
 
   return (
     <Main>
-      <PageHeader title='Attendance' description='Live from coaches’ phones. Season numbers count every practice a coach has marked.' />
+      <PageHeader title='Attendance' description='Live from coaches’ phones.' />
       <section
         className={cn(
           'mb-8 flex flex-wrap items-center gap-x-8 gap-y-3 rounded-lg border p-5',

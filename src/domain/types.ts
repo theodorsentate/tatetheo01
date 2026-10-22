@@ -12,7 +12,8 @@ export type ISODate = string
 /** ISO timestamp */
 export type ISODateTime = string
 
-export type Activity = 'sailing' | 'swim' | 'tennis'
+/** Burgee is sailing-only for now; the field stays so other activities can come back later. */
+export type Activity = 'sailing'
 
 /** Fleets / levels a sailor can be placed in. */
 export type Level =
@@ -23,8 +24,6 @@ export type Level =
   | 'opti-blue'
   | 'club-420'
   | 'ilca'
-  | 'swim'
-  | 'tennis'
 
 /** Camps are week-by-week summer sessions; teams run as year-round terms. */
 export type ProgramFormat = 'camp' | 'team'
@@ -188,8 +187,6 @@ export type StaffRole =
   | 'head-coach'
   | 'instructor'
   | 'assistant'
-  | 'swim-coach'
-  | 'tennis-pro'
 
 export type Certification = {
   certTypeId: ID
@@ -250,6 +247,98 @@ export type ClubEvent = {
   location?: string
   programIds?: ID[]
   notes?: string
+}
+
+/** A regatta the club is sending sailors to. Lives on the calendar as a ClubEvent of kind 'regatta'. */
+export type RegattaDetails = {
+  eventId: ID
+  levels: Level[]
+  /** Official entry happens elsewhere (Clubspot, Regatta Network…). */
+  entryUrl?: string
+  entryDeadline?: ISODate
+  entryFee?: number
+  coachIds: ID[]
+  chaperonesNeeded: number
+  travel?: string
+}
+
+export type RegattaResponse = {
+  eventId: ID
+  sailorId: ID
+  status: 'interested' | 'going' | 'not-going'
+  /** A guardian offered to chaperone. */
+  chaperone?: boolean
+  note?: string
+  updatedAt: ISODateTime
+  by: string
+}
+
+/* ───────────── Practice day ───────────── */
+
+/** The call for one session on one day: on, delayed or cancelled. */
+export type PracticeCall = {
+  sessionId: ID
+  date: ISODate
+  status: 'on' | 'delayed' | 'cancelled'
+  note?: string
+  postedAt: ISODateTime
+  by: string
+}
+
+export type LessonBlock = { minutes: number; title: string; detail?: string }
+
+export type LessonPlan = {
+  id: ID
+  sessionId: ID
+  date: ISODate
+  title: string
+  focus: string
+  blocks: LessonBlock[]
+  /** Skills this practice works on. */
+  skillIds: ID[]
+  notes?: string
+  by: string
+  updatedAt: ISODateTime
+}
+
+/** Season boat assignments for one session: sailor → boat, coach → coach boat. */
+export type BoatAssignments = {
+  sessionId: ID
+  sailors: Record<ID, ID | 'own'>
+  coaches: Record<ID, ID>
+}
+
+/* ───────────── Progress ───────────── */
+
+export type SkillTrack = 'lts' | 'green' | 'champ' | 'c420' | 'ilca'
+
+export type Skill = {
+  id: ID
+  track: SkillTrack
+  area: 'Safety' | 'Boat handling' | 'Racing' | 'Rules' | 'Rigging'
+  name: string
+  detail: string
+}
+
+export type SkillMark = {
+  sailorId: ID
+  skillId: ID
+  status: 'working' | 'got-it'
+  date: ISODate
+  by: string
+}
+
+/** A coach's written evaluation, shared with the family when ready. */
+export type Evaluation = {
+  id: ID
+  sailorId: ID
+  sessionId: ID
+  coachId: ID
+  date: ISODate
+  strengths: string
+  workOn: string
+  nextStep: string
+  shared: boolean
 }
 
 /* ───────────── Safety ───────────── */

@@ -23,6 +23,16 @@ export function meetsOn(session: Pick<Session, 'days' | 'startDate' | 'endDate'>
   return session.days.split(/,\s*/).some((x) => DAY_INDEX[x.trim()] === date.getDay())
 }
 
+/** The next day (today included) a session meets, within the next three weeks. */
+export function nextPractice(session: Pick<Session, 'days' | 'startDate' | 'endDate'>, from: Date): string | undefined {
+  for (let i = 0; i < 21; i++) {
+    const d = new Date(from)
+    d.setDate(d.getDate() + i)
+    if (meetsOn(session, d)) return format(d, 'yyyy-MM-dd')
+  }
+  return undefined
+}
+
 /** Every date a session met (or meets) from its start through `until`, inclusive. */
 export function practiceDates(session: Session, until: Date): string[] {
   const out: string[] = []

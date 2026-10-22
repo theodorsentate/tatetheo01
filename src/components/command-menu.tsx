@@ -16,7 +16,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command'
 import { FleetChip } from './burgee/marks'
-import { adminNav } from './layout/data/sidebar-data'
+import { SECTIONS } from './layout/data/sidebar-data'
 
 export function CommandMenu() {
   const navigate = useNavigate()
@@ -64,18 +64,14 @@ export function CommandMenu() {
         )}
         <CommandEmpty>Nothing matches that. Try a last name or a week number.</CommandEmpty>
         <CommandGroup heading='Go to'>
-          {adminNav({ waitlist: 0, certIssues: 0, outstandingForms: 0 })
-            .flatMap((g) => g.items)
-            .map((item) => (
-              <CommandItem
-                key={item.title}
-                value={`page ${item.title}`}
-                onSelect={() => run(() => navigate({ to: item.url as string }))}
-              >
-                {item.icon && <item.icon />}
-                {item.title}
+          {SECTIONS.flatMap((sec) =>
+            (sec.tabs.length ? sec.tabs : [{ title: sec.title, url: sec.url }]).map((t) => (
+              <CommandItem key={t.url} value={`page ${sec.title} ${t.title}`} onSelect={() => run(() => navigate({ to: t.url }))}>
+                <sec.icon />
+                {t.title === sec.title ? t.title : `${sec.title}: ${t.title}`}
               </CommandItem>
-            ))}
+            ))
+          )}
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading='Sailors'>

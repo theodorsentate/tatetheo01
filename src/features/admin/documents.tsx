@@ -28,8 +28,6 @@ const SHORT: Record<string, string> = {
   fa: 'First Aid & CPR',
   safesport: 'SafeSport',
   bg: 'Background',
-  lifeguard: 'Lifeguard',
-  ptr: 'Tennis cert',
 }
 
 export function AdminDocuments({ person, cert, tab = 'certs' }: { person?: string; cert?: string; tab?: string }) {
@@ -77,7 +75,7 @@ export function AdminDocuments({ person, cert, tab = 'certs' }: { person?: strin
     <Main>
       <PageHeader
         title='Documents'
-        description='Every staff certificate and club document in one place. Coaches upload their own cards from their phone; you can upload for them here.'
+        description='Every staff certificate and club document. Coaches upload their own from their phone.'
         actions={
           <Button onClick={() => setUploading(tab === 'club' ? { kind: 'club' } : { kind: 'certification', coachId: person, certTypeId: cert })}>
             <Upload className='size-4' /> Upload

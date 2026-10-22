@@ -146,7 +146,7 @@ export function AdminReports() {
 
   return (
     <Main>
-      <PageHeader title='Reports' description='Spreadsheets you can open in Excel or Google Sheets. Each one is built from live data the moment you download it.' />
+      <PageHeader title='Reports' description='Spreadsheets built from live data when you download them.' />
       <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
         {reports.map((r) => (
           <section key={r.title} className='flex flex-col rounded-lg border bg-card p-5'>

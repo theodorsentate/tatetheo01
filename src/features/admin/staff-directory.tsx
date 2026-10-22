@@ -7,9 +7,8 @@ import { CERT_TYPES } from '@/data/catalog'
 import { useLookups, useNow } from '@/data/hooks'
 import { useStore } from '@/data/store'
 import { coachCertRows, coachCertSummary } from '@/domain/rules'
-import type { Activity, Coach, StaffRole } from '@/domain/types'
+import type { Coach, StaffRole } from '@/domain/types'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -53,8 +52,8 @@ export function StaffDirectory() {
   return (
     <Main>
       <PageHeader
-        title='Staff directory'
-        description={`${coaches.length} people on staff this season. Add new coaches here; removing someone takes them off every roster but keeps their history.`}
+        title='Staff'
+        description={`${coaches.length} people on staff this season.`}
         actions={
           <Button onClick={() => setEditing('new')}>
             <Plus className='size-4' /> Add staff member
@@ -208,10 +207,6 @@ function ProfileSheet({ coach, onClose, onEdit }: { coach?: Coach; onClose: () =
           </section>
           <dl className='grid grid-cols-2 gap-x-4 gap-y-3'>
             <div>
-              <dt className='text-xs text-muted-foreground'>Coaches</dt>
-              <dd className='capitalize'>{coach.activities.join(', ')}</dd>
-            </div>
-            <div>
               <dt className='text-xs text-muted-foreground'>School / work</dt>
               <dd>{coach.school ?? '—'}</dd>
             </div>
@@ -317,20 +312,16 @@ function ProfileSheet({ coach, onClose, onEdit }: { coach?: Coach; onClose: () =
   )
 }
 
-const ACTIVITIES: Activity[] = ['sailing', 'swim', 'tennis']
-
 function CoachForm({ value, onClose, onSaved }: { value: Coach | 'new' | null; onClose: () => void; onSaved: (c: Coach) => void }) {
   const add = useStore((s) => s.addCoach)
   const update = useStore((s) => s.updateCoach)
   const editing = value && value !== 'new' ? value : undefined
   const [role, setRole] = useState<StaffRole>('instructor')
-  const [activities, setActivities] = useState<Activity[]>(['sailing'])
   const [key, setKey] = useState<string | null>(null)
   const formKey = value === 'new' ? 'new' : (editing?.id ?? null)
   if (formKey !== key) {
     setKey(formKey)
     setRole(editing?.role ?? 'instructor')
-    setActivities(editing?.activities ?? ['sailing'])
   }
   return (
     <Dialog open={!!value} onOpenChange={(o) => !o && onClose()}>
@@ -348,7 +339,7 @@ function CoachForm({ value, onClose, onSaved }: { value: Coach | 'new' | null; o
               role,
               phone: v('phone'),
               email: v('email'),
-              activities: activities.length ? activities : (['sailing'] as Activity[]),
+              activities: ['sailing'] as Coach['activities'],
               startedSeason: v('started') || undefined,
               school: v('school') || undefined,
               notes: v('notes') || undefined,
@@ -404,17 +395,6 @@ function CoachForm({ value, onClose, onSaved }: { value: Coach | 'new' | null; o
               <Input id='cf-started' name='started' defaultValue={editing?.startedSeason ?? 'Fall 2026'} />
             </div>
           </div>
-          <fieldset>
-            <legend className='mb-1.5 text-sm font-medium'>Coaches</legend>
-            <div className='flex gap-4 text-sm'>
-              {ACTIVITIES.map((a) => (
-                <label key={a} className='flex items-center gap-2 capitalize'>
-                  <Checkbox checked={activities.includes(a)} onCheckedChange={(v) => setActivities(v ? [...activities, a] : activities.filter((x) => x !== a))} />
-                  {a}
-                </label>
-              ))}
-            </div>
-          </fieldset>
           <div className='grid gap-1.5'>
             <Label htmlFor='cf-school'>School or day job</Label>
             <Input id='cf-school' name='school' defaultValue={editing?.school} placeholder='College junior' />

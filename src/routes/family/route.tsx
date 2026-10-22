@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { createFileRoute, Outlet } from '@tanstack/react-router'
-import { ClipboardList, Home, MessageSquare, Sailboat } from 'lucide-react'
+import { CalendarDays, Home, MessageSquare, Sailboat } from 'lucide-react'
 import { PERSONAS } from '@/data/catalog'
 import { familyRegs } from '@/data/hooks'
 import { useStore } from '@/data/store'
@@ -20,22 +20,21 @@ export const Route = createFileRoute('/family')({
     return (
       <PhoneShell
         tabs={[
-          { to: '/family', label: 'Home', icon: Home, exact: true, badge: todo },
+          { to: '/family', label: 'Home', icon: Home, exact: true, badge: todo + forms },
+          { to: '/family/schedule', label: 'Schedule', icon: CalendarDays },
           { to: '/family/register', label: 'Sign up', icon: Sailboat, badge: cart.length },
-          { to: '/family/forms', label: 'Forms', icon: ClipboardList, badge: forms },
           { to: '/family/messages', label: 'Messages', icon: MessageSquare },
         ]}
         aside={{
           title: 'The parent view',
           body: (
             <>
-              <p>Most parents register from their phone, often the minute registration opens.</p>
+              <p>One place for everything about each kid, instead of five apps and a group chat.</p>
               <p>
-                Burgee shows only the programs each child is eligible for, prices siblings and multi-week bookings
-                automatically, and turns a full week into a waitlist spot with no charge.
+                Is practice on today, is my kid on the water, what do I need to sign or pay, are we going to the
+                regatta, and how is my kid doing: all on one screen.
               </p>
-              <p>When a spot opens, the family gets a text and a held seat, and claims it in two taps.</p>
-              <p>Forms the club sends show up here with a due date. Parents leave notes for coaches and see when their sailor is on the water and who picked them up.</p>
+              <p>Texts and emails still go out. The app is where it all lives afterwards.</p>
             </>
           ),
         }}

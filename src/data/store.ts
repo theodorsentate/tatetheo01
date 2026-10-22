@@ -22,7 +22,13 @@ import type {
   ClubDocument,
   ClubEvent,
   Coach,
+  Evaluation,
   Incident,
+  LessonPlan,
+  PracticeCall,
+  RegattaDetails,
+  RegattaResponse,
+  SkillMark,
 } from '@/domain/types'
 import { expiredOffers, offersToIssue, seatsLeft } from '@/domain/waitlist'
 import { CERT_TYPES, DEFAULT_SETTINGS, FORM_TEMPLATES, PROGRAMS, TERMS } from './catalog'
@@ -117,6 +123,20 @@ type Actions = {
   ) => void
   clearAttendance: (date: string, sessionId: string, sailorId: string) => void
   recordSwimCheck: (c: SwimCheck) => void
+
+  // Practice day
+  callPractice: (sessionIds: string[], date: string, status: PracticeCall['status'], note: string, by: string) => number
+  saveLessonPlan: (p: Omit<LessonPlan, 'id' | 'updatedAt'> & { id?: string }) => void
+  assignBoat: (sessionId: string, who: 'sailor' | 'coach', personId: string, boatId: string | 'own' | null) => void
+
+  // Progress
+  markSkill: (sailorId: string, skillId: string, status: SkillMark['status'] | null, by: string) => void
+  saveEvaluation: (e: Omit<Evaluation, 'id'> & { id?: string }) => void
+
+  // Regattas
+  addRegatta: (e: Omit<ClubEvent, 'id' | 'kind'>, d: Omit<RegattaDetails, 'eventId'>) => void
+  updateRegatta: (eventId: string, patch: Partial<RegattaDetails>) => void
+  respondToRegatta: (r: Omit<RegattaResponse, 'updatedAt'>) => void
 }
 
 const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 9)}`
@@ -454,9 +474,7 @@ export const useStore = create<State & Actions>()(
             : s.coaches.filter((c) => c.activities.includes(program.activity) && c.role !== 'program-director')
           const needed = Math.ceil(roster.length / program.ratio)
           const coaches = pool.slice(0, Math.max(needed, 1))
-          const boats = program.activity === 'sailing'
-            ? ['RIB 1 "Osprey"', 'RIB 2 "Heron"', 'RIB 3 "Pelican"', 'Whaler 4', 'Whaler 5']
-            : program.activity === 'tennis' ? ['Courts 1–2', 'Courts 3–4', 'Court 5'] : ['Lanes 1–3', 'Lanes 4–6', 'Shallow end']
+          const boats = ['RIB 1 "Osprey"', 'RIB 2 "Heron"', 'RIB 3 "Pelican"', 'Whaler 4', 'Whaler 5']
           const groups = autoGroups(session, program, roster, coaches, () => uid('g'), boats)
           return { groups: [...s.groups.filter((g) => g.sessionId !== sessionId), ...groups] }
         }),
@@ -630,8 +648,86 @@ export const useStore = create<State & Actions>()(
       addDocument: (d) => set((s) => ({ documents: [{ ...d, id: uid('doc'), uploadedAt: new Date().toISOString() }, ...s.documents] })),
       removeDocument: (id) => set((s) => ({ documents: s.documents.filter((d) => d.id !== id) })),
 
+      callPractice: (sessionIds, date, status, note, by) => {
+        const s = get()
+        const now = new Date().toISOString()
+        const keep = s.practiceCalls.filter((c) => !(c.date === date && sessionIds.includes(c.sessionId)))
+        const calls: PracticeCall[] = sessionIds.map((sessionId) => ({ sessionId, date, status, note: note || undefined, postedAt: now, by }))
+        set({ practiceCalls: [...keep, ...calls] })
+        const familyIds = [...new Set(sessionIds.flatMap((sid) => audienceFamilyIds({ kind: 'session', sessionId: sid }, s, s.settings.season)))]
+        if (!familyIds.length) return 0
+        const names = sessionIds.map((sid) => {
+          const se = s.sessions.find((x) => x.id === sid)
+          return PROGRAMS.find((p) => p.id === se?.programId)?.name ?? 'Practice'
+        })
+        const label = names.length > 2 ? 'All teams' : names.join(' and ')
+        const word = status === 'on' ? 'is on' : status === 'delayed' ? 'is delayed' : 'is cancelled'
+        return get().sendAnnouncement({
+          title: `${label}: practice ${word} ${date === format(new Date(), 'yyyy-MM-dd') ? 'today' : `on ${format(new Date(`${date}T12:00:00`), 'EEE, MMM d')}`}`,
+          body: note || (status === 'on' ? 'See you at the dock.' : status === 'delayed' ? 'We’ll post an update within the hour.' : 'Stay safe. We’ll see you next practice.'),
+          category: status === 'on' ? 'schedule' : 'weather',
+          audience: { kind: 'families', familyIds, label },
+          channels: ['email', 'sms'],
+          sentBy: by,
+        })
+      },
+
+      saveLessonPlan: (p) =>
+        set((s) => {
+          const existing = p.id ? s.lessonPlans.find((x) => x.id === p.id) : s.lessonPlans.find((x) => x.sessionId === p.sessionId && x.date === p.date)
+          const full: LessonPlan = { ...p, id: existing?.id ?? uid('lp'), updatedAt: new Date().toISOString() }
+          return { lessonPlans: existing ? s.lessonPlans.map((x) => (x.id === existing.id ? full : x)) : [...s.lessonPlans, full] }
+        }),
+
+      assignBoat: (sessionId, who, personId, boatId) =>
+        set((s) => {
+          const cur = s.boatAssignments.find((a) => a.sessionId === sessionId) ?? { sessionId, sailors: {}, coaches: {} }
+          const next = { ...cur, sailors: { ...cur.sailors }, coaches: { ...cur.coaches } }
+          if (who === 'sailor') {
+            if (boatId === null) delete next.sailors[personId]
+            else next.sailors[personId] = boatId
+          } else if (boatId === null || boatId === 'own') delete next.coaches[personId]
+          else next.coaches[personId] = boatId
+          return { boatAssignments: [...s.boatAssignments.filter((a) => a.sessionId !== sessionId), next] }
+        }),
+
+      markSkill: (sailorId, skillId, status, by) =>
+        set((s) => {
+          const rest = s.skillMarks.filter((m) => !(m.sailorId === sailorId && m.skillId === skillId))
+          return { skillMarks: status ? [...rest, { sailorId, skillId, status, by, date: format(new Date(), 'yyyy-MM-dd') }] : rest }
+        }),
+
+      saveEvaluation: (e) =>
+        set((s) => {
+          const full: Evaluation = { ...e, id: e.id ?? uid('evl') }
+          const exists = s.evaluations.some((x) => x.id === full.id)
+          return { evaluations: exists ? s.evaluations.map((x) => (x.id === full.id ? full : x)) : [full, ...s.evaluations] }
+        }),
+
+      addRegatta: (e, d) =>
+        set((s) => {
+          const id = uid('ev')
+          return {
+            calendar: [...s.calendar, { ...e, id, kind: 'regatta' }],
+            regattas: [...s.regattas, { ...d, eventId: id }],
+          }
+        }),
+      updateRegatta: (eventId, patch) => set((s) => ({ regattas: s.regattas.map((r) => (r.eventId === eventId ? { ...r, ...patch } : r)) })),
+      respondToRegatta: (r) =>
+        set((s) => ({
+          regattaResponses: [
+            ...s.regattaResponses.filter((x) => !(x.eventId === r.eventId && x.sailorId === r.sailorId)),
+            { ...r, updatedAt: new Date().toISOString() },
+          ],
+        })),
+
       addCalendarEvent: (e) => set((s) => ({ calendar: [...s.calendar, { ...e, id: uid('ev') }] })),
-      removeCalendarEvent: (id) => set((s) => ({ calendar: s.calendar.filter((e) => e.id !== id) })),
+      removeCalendarEvent: (id) =>
+        set((s) => ({
+          calendar: s.calendar.filter((e) => e.id !== id),
+          regattas: s.regattas.filter((r) => r.eventId !== id),
+          regattaResponses: s.regattaResponses.filter((r) => r.eventId !== id),
+        })),
 
       logIncident: (i) =>
         set((s) => ({
@@ -659,7 +755,7 @@ export const useStore = create<State & Actions>()(
     {
       name: 'burgee-demo-v1',
       storage: createJSONStorage(() => safeStorage),
-      version: 3,
+      version: 4,
       // Demo data shape changed: start older saved demos fresh.
       migrate: () => fresh() as never,
     }

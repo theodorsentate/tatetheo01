@@ -6,7 +6,9 @@ import type {
   ActivityEvent,
   Announcement,
   AttendanceEntry,
+  BoatAssignments,
   Coach,
+  Evaluation,
   Family,
   Boat,
   ClubDocument,
@@ -17,10 +19,15 @@ import type {
   Group,
   Incident,
   LedgerEntry,
+  LessonPlan,
   Level,
+  PracticeCall,
+  RegattaDetails,
+  RegattaResponse,
   Registration,
   Sailor,
   Session,
+  SkillMark,
   SwimCheck,
 } from '@/domain/types'
 import { seatsLeft } from '@/domain/waitlist'
@@ -31,6 +38,7 @@ import {
   PROGRAMS,
   TERMS,
 } from './catalog'
+import { LESSON_LIBRARY, SKILLS, trackFor } from './curriculum'
 
 export type DemoState = {
   sessions: Session[]
@@ -52,6 +60,13 @@ export type DemoState = {
   incidents: Incident[]
   boats: Boat[]
   ledger: LedgerEntry[]
+  regattas: RegattaDetails[]
+  regattaResponses: RegattaResponse[]
+  practiceCalls: PracticeCall[]
+  lessonPlans: LessonPlan[]
+  boatAssignments: BoatAssignments[]
+  skillMarks: SkillMark[]
+  evaluations: Evaluation[]
 }
 
 /** One-off form the director already sent this fall. */
@@ -167,8 +182,6 @@ export function createSeed(now: Date = new Date()): DemoState {
   camp('rwb-camp', allWeeks, 24, '9:00 AM – 3:30 PM')
   camp('420-camp', allWeeks, 16, '9:30 AM – 4:00 PM')
   camp('ilca-camp', [2, 4, 6, 8], 12, '9:30 AM – 4:00 PM')
-  camp('swim', allWeeks, 30, '1:00 PM – 2:30 PM')
-  camp('tennis', allWeeks, 16, '12:30 PM – 2:30 PM')
 
   for (const term of TERMS.filter((t) => t.season !== 'summer')) {
     const teams: [string, number, string, string][] = [
@@ -225,9 +238,9 @@ export function createSeed(now: Date = new Date()): DemoState {
     ['c-grace', 'Grace Holloway', 'assistant', ['sailing']],
     ['c-ruby', 'Ruby Kessler', 'assistant', ['sailing'], { bg: null }],
     ['c-nora', 'Nora Ames', 'assistant', ['sailing']],
-    ['c-tessa', 'Tessa Lund', 'swim-coach', ['swim'], { lifeguard: 27 }],
-    ['c-marcus', 'Marcus Reed', 'tennis-pro', ['tennis']],
-    ['c-jordan', 'Jordan Hale', 'program-director', ['sailing', 'swim', 'tennis']],
+    ['c-tessa', 'Tessa Lund', 'instructor', ['sailing'], { pwr: 27 }],
+    ['c-marcus', 'Marcus Reed', 'assistant', ['sailing']],
+    ['c-jordan', 'Jordan Hale', 'program-director', ['sailing']],
   ]
   const coaches: Coach[] = coachSpecs.map(([cid, name, role, activities, tweaks], i) => ({
     id: cid,
@@ -249,7 +262,7 @@ export function createSeed(now: Date = new Date()): DemoState {
   }))
   coaches.find((c) => c.id === 'c-maya')!.notes = 'Runs the Green Team and leads new-coach onboarding. Prefers texts over calls on the water.'
   coaches.find((c) => c.id === 'c-noah')!.notes = 'Available Tue/Thu only this fall (classes).'
-  coaches.find((c) => c.id === 'c-tessa')!.notes = 'Also covers the club pool lifeguard schedule on weekends.'
+  coaches.find((c) => c.id === 'c-tessa')!.notes = 'Drives the mark-set boat at Saturday regattas.'
 
   /* ───────────── Families & sailors ───────────── */
   const families: Family[] = []
@@ -436,16 +449,6 @@ export function createSeed(now: Date = new Date()): DemoState {
         .map((x) => x.o)
         .sort((a, b) => a.startDate.localeCompare(b.startDate))
       chosen.forEach((session, k) => pending.push({ sailor: s, session, at: new Date(at.getTime() + k * 60000) }))
-      if (chance(0.45)) {
-        const extra = eligibleSessions(s, 'summer-27').filter(
-          (x) => programById.get(x.programId)!.activity !== 'sailing'
-        )
-        const n = 1 + Math.floor(rand() * 3)
-        for (let k = 0; k < n && extra.length; k++) {
-          const e = extra.splice(Math.floor(rand() * extra.length), 1)[0]
-          pending.push({ sailor: s, session: e, at: new Date(at.getTime() + 300000 + k * 1000) })
-        }
-      }
     }
     pending.sort((a, b) => a.at.getTime() - b.at.getTime())
     // Force the peak weeks of the popular camps to oversubscribe.
@@ -611,9 +614,9 @@ export function createSeed(now: Date = new Date()): DemoState {
     return { ...a, id: id('a'), sentAt: sentAt.toISOString(), opened: Math.round(a.recipients * (0.62 + rand() * 0.3)) }
   }
   const announcements: Announcement[] = [
-    ann(1, 13, {
-      title: 'Thursday practice cancelled — small craft advisory',
-      body: 'NWS has a small craft advisory through 8 PM with gusts to 28 knots. All Thursday team practices are cancelled. Saturday is on as scheduled. Make-up session details to follow.',
+    ann(9, 13, {
+      title: 'Tuesday practice starts 30 minutes late: fog',
+      body: 'Dense fog on the harbor this afternoon. Coaches will hold sailors ashore for a chalk talk and launch at 4:15 once visibility clears. Pickup time is unchanged.',
       category: 'weather',
       audience: { kind: 'everyone' },
       channels: ['email', 'sms'],
@@ -842,10 +845,11 @@ export function createSeed(now: Date = new Date()): DemoState {
     { id: id('ev'), title: 'Frostbite Green Fleet Regatta', kind: 'regatta', date: '2026-11-07', time: 'Launch 9:30 AM, first warning 11:00', location: 'Saltmarsh Bay YC', programIds: ['green-team'], notes: 'Spectator boat available, reserve with Maya.' },
     { id: id('ev'), title: 'Fall Championship Regatta', kind: 'regatta', date: '2026-11-14', endDate: '2026-11-15', time: 'Both days 10:00 AM', location: 'Bayside Sailing Association', programIds: ['rwb-team', '420-team', 'ilca-team'] },
     { id: id('ev'), title: 'Fall season wrap and team pizza party', kind: 'social', date: '2026-11-21', time: '12:30 PM', location: 'Junior shed' },
-    { id: id('ev'), title: 'Coach First Aid & CPR recertification', kind: 'training', date: '2026-12-05', time: '9:00 AM – 1:00 PM', location: 'Club ballroom', notes: 'Maya, Ruby and Tessa need this one.' },
+    { id: id('ev'), title: 'Coach First Aid & CPR recertification', kind: 'training', date: '2026-12-05', time: '9:00 AM – 1:00 PM', location: 'Club ballroom', notes: 'Maya and Ruby need this one.' },
     { id: id('ev'), title: 'Spring early-bird pricing ends', kind: 'deadline', date: '2026-12-15' },
     { id: id('ev'), title: 'Summer early-bird pricing ends', kind: 'deadline', date: '2027-01-31' },
     { id: id('ev'), title: 'Spring season starts', kind: 'training', date: '2027-03-02', programIds: ['green-team', 'rwb-team', '420-team', 'ilca-team'] },
+    { id: id('ev'), title: 'Turkey Bowl Opti Regatta', kind: 'regatta', date: '2026-11-28', time: 'First warning 11:00 AM', location: 'Harbor Island YC', programIds: ['green-team', 'rwb-team'] },
     { id: id('ev'), title: 'Spring Invitational', kind: 'regatta', date: '2027-04-17', endDate: '2027-04-18', location: 'Saltmarsh Bay YC', programIds: ['rwb-team', '420-team'] },
     { id: id('ev'), title: 'Summer coach onboarding weekend', kind: 'training', date: '2027-06-05', endDate: '2027-06-06', location: 'Junior shed' },
     { id: id('ev'), title: 'Junior awards banquet', kind: 'social', date: '2027-08-07', time: '6:00 PM', location: 'Club lawn' },
@@ -936,6 +940,128 @@ export function createSeed(now: Date = new Date()): DemoState {
   fix('ILCA #4', 'needs-repair', 'Mainsheet block cracked')
   fix('RIB 2 "Heron"', 'out-of-service', 'Outboard stalls at idle. Mechanic booked for Tuesday.')
 
+  /* ───────────── Regattas: details and family responses ───────────── */
+  const evByTitle = (t: string) => calendar.find((e) => e.title === t)!
+  const regattas: RegattaDetails[] = [
+    { eventId: evByTitle('Frostbite Green Fleet Regatta').id, levels: ['opti-green'], entryDeadline: '2026-11-04', entryFee: 35, entryUrl: 'https://www.regattanetwork.com', coachIds: ['c-maya', 'c-grace'], chaperonesNeeded: 2, travel: 'Home regatta. Sailors launch from our dock.' },
+    { eventId: evByTitle('Fall Championship Regatta').id, levels: ['opti-red', 'opti-white', 'opti-blue', 'club-420', 'ilca'], entryDeadline: '2026-11-08', entryFee: 85, entryUrl: 'https://www.regattanetwork.com', coachIds: ['c-liam', 'c-eli', 'c-owen'], chaperonesNeeded: 3, travel: 'Trailer leaves Friday 3 PM. Families arrange their own rides; carpool sheet in the team chat.' },
+    { eventId: evByTitle('Turkey Bowl Opti Regatta').id, levels: ['opti-green', 'opti-red', 'opti-white', 'opti-blue'], entryDeadline: '2026-11-20', entryFee: 60, entryUrl: 'https://www.regattanetwork.com', coachIds: ['c-maya', 'c-liam'], chaperonesNeeded: 2, travel: 'Two-hour drive. Club trailer takes the Optis Friday night.' },
+    { eventId: evByTitle('Spring Invitational').id, levels: ['opti-red', 'opti-white', 'opti-blue', 'club-420'], coachIds: ['c-liam', 'c-eli'], chaperonesNeeded: 2 },
+  ]
+  const regattaResponses: RegattaResponse[] = []
+  const respond = (eventId: string, sailorId: string, at: Date, opts: { going: number; interested: number }) => {
+    const r = rand()
+    const status: RegattaResponse['status'] | undefined = r < opts.going ? 'going' : r < opts.going + opts.interested ? 'interested' : r < opts.going + opts.interested + 0.08 ? 'not-going' : undefined
+    if (!status) return
+    const k = sailors.find((x) => x.id === sailorId)!
+    const fam = familyById.get(k.familyId)!
+    regattaResponses.push({ eventId, sailorId, status, chaperone: status === 'going' && chance(0.12), updatedAt: at.toISOString(), by: fam.guardians[0].name })
+  }
+  for (const sid of rosterOf('green-team-fall-26').filter((x) => x !== 's-hazel')) respond(regattas[0].eventId, sid, subDays(now, 1 + Math.floor(rand() * 8)), { going: 0.55, interested: 0.2 })
+  for (const sid of [...rosterOf('rwb-team-fall-26'), ...rosterOf('420-team-fall-26'), ...rosterOf('ilca-team-fall-26')].filter((x) => x !== 's-finn'))
+    respond(regattas[1].eventId, sid, subDays(now, 1 + Math.floor(rand() * 10)), { going: 0.45, interested: 0.25 })
+  for (const sid of [...rosterOf('green-team-fall-26'), ...rosterOf('rwb-team-fall-26')].filter((x) => x !== 's-finn' && x !== 's-hazel'))
+    respond(regattas[2].eventId, sid, subDays(now, Math.floor(rand() * 4)), { going: 0.12, interested: 0.3 })
+  regattaResponses.push({ eventId: regattas[1].eventId, sailorId: 's-finn', status: 'going', updatedAt: subDays(now, 3).toISOString(), by: 'Sarah Calloway' })
+
+  /* ───────────── Practice day: calls, lesson plans, boats ───────────── */
+  const today = iso(now)
+  const meetsToday = sessions.filter((x) => x.termId === 'fall-26' && practiceDates(x, now).includes(today))
+  const practiceCalls: PracticeCall[] = meetsToday.map((x) => ({
+    sessionId: x.id,
+    date: today,
+    status: 'on',
+    note: 'SW 8–12 knots, 72°F. Practice is on.',
+    postedAt: new Date(`${today}T12:45:00`).toISOString(),
+    by: 'Jordan Hale',
+  }))
+  const plan = (sessionId: string, date: string, libId: string, by: string, notes?: string): LessonPlan => {
+    const lib = LESSON_LIBRARY.find((l) => l.id === libId)!
+    return { id: id('lp'), sessionId, date, title: lib.title, focus: lib.focus, blocks: lib.blocks, skillIds: lib.skillIds, notes, by, updatedAt: subDays(now, 1).toISOString() }
+  }
+  const lessonPlans: LessonPlan[] = [
+    plan('green-team-fall-26', today, 'starts', 'Maya Ortiz', 'Frostbite is two weeks out. Everyone should leave today able to time a start. Hazel sails with a buddy boat.'),
+    plan('rwb-team-fall-26', today, 'breeze', 'Liam Becker', 'Breeze builds after 4:30. Whites and Blues do the full tack sets; Reds can stay on reaches.'),
+    plan('420-team-fall-26', iso(addDays(now, 4)), 'marks', 'Eli Navarro'),
+  ]
+  const optis = fleet.filter((b) => b.kind === 'Opti' && b.status !== 'out-of-service')
+  const c420s = fleet.filter((b) => b.kind === 'Club 420' && b.status === 'ready')
+  const ilcas = fleet.filter((b) => b.kind === 'ILCA' && b.status === 'ready')
+  const coachBoats = fleet.filter((b) => (b.kind === 'RIB' || b.kind === 'Whaler') && b.status === 'ready')
+  const boatAssignments: BoatAssignments[] = []
+  const assign = (sessionId: string, pool: Boat[], ownShare: number, perBoat = 1) => {
+    const roster = rosterOf(sessionId)
+    const a: BoatAssignments = { sessionId, sailors: {}, coaches: {} }
+    let i = 0
+    roster.forEach((sid, n) => {
+      if (perBoat === 1 && chance(ownShare)) a.sailors[sid] = 'own'
+      else {
+        const boat = pool[Math.floor(i / perBoat) % pool.length]
+        if (boat) a.sailors[sid] = boat.id
+        i++
+      }
+      void n
+    })
+    const coachIds = [...new Set(groups.filter((g) => g.sessionId === sessionId).flatMap((g) => g.coachIds))]
+    coachIds.forEach((cid, n) => {
+      const boat = coachBoats[(boatAssignments.length + n) % coachBoats.length]
+      if (boat) a.coaches[cid] = boat.id
+    })
+    boatAssignments.push(a)
+  }
+  assign('green-team-fall-26', optis.slice(0, 10), 0.25)
+  assign('rwb-team-fall-26', optis.slice(10), 0.6)
+  assign('420-team-fall-26', c420s, 0, 2)
+  assign('ilca-team-fall-26', ilcas, 0.3)
+
+  /* ───────────── Progress: skills and evaluations ───────────── */
+  const skillMarks: SkillMark[] = []
+  const evaluations: Evaluation[] = []
+  const fallTeams = ['green-team-fall-26', 'rwb-team-fall-26', '420-team-fall-26', 'ilca-team-fall-26']
+  for (const sessionId of fallTeams) {
+    const coachId = groups.find((g) => g.sessionId === sessionId && g.coachIds.length)?.coachIds[0] ?? 'c-maya'
+    const coachName = coaches.find((c) => c.id === coachId)!.name
+    for (const sid of rosterOf(sessionId)) {
+      const k = sailors.find((x) => x.id === sid)!
+      const track = trackFor(k.level)
+      const list = SKILLS.filter((x) => x.track === track)
+      const got = sid === 's-hazel' ? 3 : sid === 's-finn' ? 5 : Math.floor(1 + rand() * 6)
+      list.forEach((sk, i) => {
+        if (i < got) skillMarks.push({ sailorId: sid, skillId: sk.id, status: 'got-it', date: iso(subDays(now, 3 + Math.floor(rand() * 40))), by: coachName })
+        else if (i < got + 2 && (sid === 's-hazel' || sid === 's-finn' || chance(0.6)))
+          skillMarks.push({ sailorId: sid, skillId: sk.id, status: 'working', date: iso(subDays(now, 1 + Math.floor(rand() * 10))), by: coachName })
+      })
+    }
+  }
+  evaluations.push(
+    {
+      id: id('evl'),
+      sailorId: 's-finn',
+      sessionId: 'rwb-team-fall-26',
+      coachId: 'c-liam',
+      date: '2026-10-10',
+      strengths: 'Finn’s boat handling has jumped this fall. His roll tacks are some of the cleanest on the team and he’s fast on reaches.',
+      workOn: 'Starts. He tends to arrive at the line early and stall. We’re working on holding position and accelerating in the last five seconds.',
+      nextStep: 'On track to move up to the Blue fleet for spring.',
+      shared: true,
+    },
+    {
+      id: id('evl'),
+      sailorId: 's-hazel',
+      sessionId: 'green-team-fall-26',
+      coachId: 'c-maya',
+      date: '2026-10-10',
+      strengths: 'Hazel is a careful, steady sailor. She steers a straight line upwind and always knows where the next mark is.',
+      workOn: 'Confidence when it’s breezy. We pair her with a buddy boat and she’s capsized and recovered twice on purpose this month.',
+      nextStep: 'Ready for her first Green Fleet regatta at the Frostbite.',
+      shared: true,
+    },
+  )
+  for (const sid of rosterOf('rwb-team-fall-26').slice(0, 6)) {
+    if (sid === 's-finn') continue
+    evaluations.push({ id: id('evl'), sailorId: sid, sessionId: 'rwb-team-fall-26', coachId: 'c-liam', date: '2026-10-10', strengths: 'Good speed upwind and works hard in drills.', workOn: 'Downwind angles and mark roundings.', nextStep: 'Keep building toward championship-fleet racing.', shared: chance(0.7) })
+  }
+
   return {
     sessions,
     families,
@@ -956,5 +1082,12 @@ export function createSeed(now: Date = new Date()): DemoState {
     swimChecks,
     customTemplates: [PERMISSION_SLIP],
     formRequests,
+    regattas,
+    regattaResponses,
+    practiceCalls,
+    lessonPlans,
+    boatAssignments,
+    skillMarks,
+    evaluations,
   }
 }

@@ -30,6 +30,8 @@ import { Route as AdminIncidentsRouteImport } from './routes/admin/incidents'
 import { Route as AdminMessagesRouteImport } from './routes/admin/messages'
 import { Route as AdminPaymentsRouteImport } from './routes/admin/payments'
 import { Route as AdminProgramsRouteImport } from './routes/admin/programs'
+import { Route as AdminProgressRouteImport } from './routes/admin/progress'
+import { Route as AdminRegattasRouteImport } from './routes/admin/regattas'
 import { Route as AdminRegistrationsRouteImport } from './routes/admin/registrations'
 import { Route as AdminReportsRouteImport } from './routes/admin/reports'
 import { Route as AdminSailorsRouteImport } from './routes/admin/sailors'
@@ -43,6 +45,7 @@ import { Route as FamilyCheckoutRouteImport } from './routes/family/checkout'
 import { Route as FamilyFormsRouteImport } from './routes/family/forms'
 import { Route as FamilyMessagesRouteImport } from './routes/family/messages'
 import { Route as FamilyRegisterRouteImport } from './routes/family/register'
+import { Route as FamilyScheduleRouteImport } from './routes/family/schedule'
 import { Route as AdminSessionsSessionIdRouteImport } from './routes/admin/sessions/$sessionId'
 import { Route as CoachGroupsGroupIdRouteImport } from './routes/coach/groups/$groupId'
 
@@ -151,6 +154,16 @@ const AdminProgramsRoute = AdminProgramsRouteImport.update({
   path: '/programs',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminProgressRoute = AdminProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminRegattasRoute = AdminRegattasRouteImport.update({
+  id: '/regattas',
+  path: '/regattas',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminRegistrationsRoute = AdminRegistrationsRouteImport.update({
   id: '/registrations',
   path: '/registrations',
@@ -216,6 +229,11 @@ const FamilyRegisterRoute = FamilyRegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => FamilyRouteRoute,
 } as any)
+const FamilyScheduleRoute = FamilyScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
+  getParentRoute: () => FamilyRouteRoute,
+} as any)
 const AdminSessionsSessionIdRoute = AdminSessionsSessionIdRouteImport.update({
   id: '/sessions/$sessionId',
   path: '/sessions/$sessionId',
@@ -248,6 +266,8 @@ export interface FileRoutesByFullPath {
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/programs': typeof AdminProgramsRoute
+  '/admin/progress': typeof AdminProgressRoute
+  '/admin/regattas': typeof AdminRegattasRoute
   '/admin/registrations': typeof AdminRegistrationsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/sailors': typeof AdminSailorsRoute
@@ -259,6 +279,7 @@ export interface FileRoutesByFullPath {
   '/family/forms': typeof FamilyFormsRoute
   '/family/messages': typeof FamilyMessagesRoute
   '/family/register': typeof FamilyRegisterRoute
+  '/family/schedule': typeof FamilyScheduleRoute
   '/admin/': typeof AdminIndexRoute
   '/coach/': typeof CoachIndexRoute
   '/family/': typeof FamilyIndexRoute
@@ -283,6 +304,8 @@ export interface FileRoutesByTo {
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/programs': typeof AdminProgramsRoute
+  '/admin/progress': typeof AdminProgressRoute
+  '/admin/regattas': typeof AdminRegattasRoute
   '/admin/registrations': typeof AdminRegistrationsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/sailors': typeof AdminSailorsRoute
@@ -294,6 +317,7 @@ export interface FileRoutesByTo {
   '/family/forms': typeof FamilyFormsRoute
   '/family/messages': typeof FamilyMessagesRoute
   '/family/register': typeof FamilyRegisterRoute
+  '/family/schedule': typeof FamilyScheduleRoute
   '/admin': typeof AdminIndexRoute
   '/coach': typeof CoachIndexRoute
   '/family': typeof FamilyIndexRoute
@@ -322,6 +346,8 @@ export interface FileRoutesById {
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/programs': typeof AdminProgramsRoute
+  '/admin/progress': typeof AdminProgressRoute
+  '/admin/regattas': typeof AdminRegattasRoute
   '/admin/registrations': typeof AdminRegistrationsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/sailors': typeof AdminSailorsRoute
@@ -333,6 +359,7 @@ export interface FileRoutesById {
   '/family/forms': typeof FamilyFormsRoute
   '/family/messages': typeof FamilyMessagesRoute
   '/family/register': typeof FamilyRegisterRoute
+  '/family/schedule': typeof FamilyScheduleRoute
   '/admin/': typeof AdminIndexRoute
   '/coach/': typeof CoachIndexRoute
   '/family/': typeof FamilyIndexRoute
@@ -362,6 +389,8 @@ export interface FileRouteTypes {
     | '/admin/messages'
     | '/admin/payments'
     | '/admin/programs'
+    | '/admin/progress'
+    | '/admin/regattas'
     | '/admin/registrations'
     | '/admin/reports'
     | '/admin/sailors'
@@ -373,6 +402,7 @@ export interface FileRouteTypes {
     | '/family/forms'
     | '/family/messages'
     | '/family/register'
+    | '/family/schedule'
     | '/admin/'
     | '/coach/'
     | '/family/'
@@ -397,6 +427,8 @@ export interface FileRouteTypes {
     | '/admin/messages'
     | '/admin/payments'
     | '/admin/programs'
+    | '/admin/progress'
+    | '/admin/regattas'
     | '/admin/registrations'
     | '/admin/reports'
     | '/admin/sailors'
@@ -408,6 +440,7 @@ export interface FileRouteTypes {
     | '/family/forms'
     | '/family/messages'
     | '/family/register'
+    | '/family/schedule'
     | '/admin'
     | '/coach'
     | '/family'
@@ -435,6 +468,8 @@ export interface FileRouteTypes {
     | '/admin/messages'
     | '/admin/payments'
     | '/admin/programs'
+    | '/admin/progress'
+    | '/admin/regattas'
     | '/admin/registrations'
     | '/admin/reports'
     | '/admin/sailors'
@@ -446,6 +481,7 @@ export interface FileRouteTypes {
     | '/family/forms'
     | '/family/messages'
     | '/family/register'
+    | '/family/schedule'
     | '/admin/'
     | '/coach/'
     | '/family/'
@@ -614,6 +650,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProgramsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/progress': {
+      id: '/admin/progress'
+      path: '/progress'
+      fullPath: '/admin/progress'
+      preLoaderRoute: typeof AdminProgressRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/regattas': {
+      id: '/admin/regattas'
+      path: '/regattas'
+      fullPath: '/admin/regattas'
+      preLoaderRoute: typeof AdminRegattasRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/registrations': {
       id: '/admin/registrations'
       path: '/registrations'
@@ -705,6 +755,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FamilyRegisterRouteImport
       parentRoute: typeof FamilyRouteRoute
     }
+    '/family/schedule': {
+      id: '/family/schedule'
+      path: '/schedule'
+      fullPath: '/family/schedule'
+      preLoaderRoute: typeof FamilyScheduleRouteImport
+      parentRoute: typeof FamilyRouteRoute
+    }
     '/admin/sessions/$sessionId': {
       id: '/admin/sessions/$sessionId'
       path: '/sessions/$sessionId'
@@ -734,6 +791,8 @@ interface AdminRouteRouteChildren {
   AdminMessagesRoute: typeof AdminMessagesRoute
   AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminProgramsRoute: typeof AdminProgramsRoute
+  AdminProgressRoute: typeof AdminProgressRoute
+  AdminRegattasRoute: typeof AdminRegattasRoute
   AdminRegistrationsRoute: typeof AdminRegistrationsRoute
   AdminReportsRoute: typeof AdminReportsRoute
   AdminSailorsRoute: typeof AdminSailorsRoute
@@ -755,6 +814,8 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminMessagesRoute: AdminMessagesRoute,
   AdminPaymentsRoute: AdminPaymentsRoute,
   AdminProgramsRoute: AdminProgramsRoute,
+  AdminProgressRoute: AdminProgressRoute,
+  AdminRegattasRoute: AdminRegattasRoute,
   AdminRegistrationsRoute: AdminRegistrationsRoute,
   AdminReportsRoute: AdminReportsRoute,
   AdminSailorsRoute: AdminSailorsRoute,
@@ -791,6 +852,7 @@ interface FamilyRouteRouteChildren {
   FamilyFormsRoute: typeof FamilyFormsRoute
   FamilyMessagesRoute: typeof FamilyMessagesRoute
   FamilyRegisterRoute: typeof FamilyRegisterRoute
+  FamilyScheduleRoute: typeof FamilyScheduleRoute
   FamilyIndexRoute: typeof FamilyIndexRoute
 }
 
@@ -799,6 +861,7 @@ const FamilyRouteRouteChildren: FamilyRouteRouteChildren = {
   FamilyFormsRoute: FamilyFormsRoute,
   FamilyMessagesRoute: FamilyMessagesRoute,
   FamilyRegisterRoute: FamilyRegisterRoute,
+  FamilyScheduleRoute: FamilyScheduleRoute,
   FamilyIndexRoute: FamilyIndexRoute,
 }
 

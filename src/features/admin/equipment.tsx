@@ -32,8 +32,8 @@ export function AdminEquipment() {
   return (
     <Main>
       <PageHeader
-        title='Boats & equipment'
-        description='The junior fleet and coach boats. Anything marked needing repair or out of service shows on the Today page until it’s fixed.'
+        title='Boats'
+        description='Boats that need work show on Home until they’re fixed.'
         actions={
           <Button onClick={() => setAdding(true)}>
             <Plus className='size-4' /> Add a boat

@@ -147,12 +147,12 @@ describe('eligibility, certs, rosters', () => {
 
   it('lists required certs for a role, including missing ones', () => {
     const rows = coachCertRows(
-      { id: 'c', name: 'C', role: 'swim-coach', email: '', phone: '', activities: ['swim'], certs: [], avatarHue: 0 },
+      { id: 'c', name: 'C', role: 'assistant', email: '', phone: '', activities: ['sailing'], certs: [], avatarHue: 0 },
       CERT_TYPES,
       new Date(),
       45
     )
-    expect(rows.map((r) => r.certType.id).sort()).toEqual(['bg', 'fa', 'lifeguard', 'safesport'])
+    expect(rows.map((r) => r.certType.id).sort()).toEqual(['bg', 'fa', 'pwr', 'safesport'])
     expect(rows.every((r) => r.status === 'missing')).toBe(true)
   })
 

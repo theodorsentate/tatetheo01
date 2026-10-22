@@ -13,6 +13,9 @@ import {
   type Ctx,
   attendanceInfo,
   calendarInfo,
+  practiceTodayInfo,
+  progressInfo,
+  regattasInfo,
   documentsInfo,
   equipmentInfo,
   familyInfo,
@@ -124,6 +127,75 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
     }
   }
 
+  /* Today's practice calls */
+  if (/practice/.test(q) && /today|tonight|this afternoon|\bon\b|cancel|delay|call/.test(q) && !/plan|attend/.test(q)) {
+    const res = practiceTodayInfo(ctx)
+    actions.push({ kind: 'link', label: 'Open Home', href: '/admin' })
+    if (!res.teams.length) return { text: `No teams practice today (${res.date}).`, actions }
+    return {
+      text: list(res.teams.map((t) => `**${t.team}** (${t.time}): ${t.call === 'no call yet' ? 'no call yet' : `${t.call}${t.calledBy ? `, called by ${t.calledBy}` : ''}`}${t.note ? `. “${t.note}”` : ''} Plan: ${t.lessonPlan}.`)),
+      actions,
+    }
+  }
+
+  /* Regattas: who's going */
+  if (/regatta|frostbite|turkey bowl|championship|invitational/.test(q) && /going|interested|answer|respond|signed|coming|chaperone|who|how many|entries|entered/.test(q)) {
+    const words = q.match(/frostbite|turkey bowl|championship|invitational/)
+    const res = regattasInfo(ctx, { search: words?.[0] })
+    const r = res.regattas[0]
+    if (!r) return { text: 'No upcoming regattas match that.', actions }
+    actions.push({ kind: 'link', label: `Open ${r.title}`, href: r.page })
+    if (wantsMessage(q) && r.noAnswer.length) {
+      const fams = [...new Set(r.noAnswer.map((n) => ctx.s.sailors.find((k) => `${k.firstName} ${k.lastName}` === n)?.familyId).filter(Boolean) as string[])]
+      actions.push({
+        kind: 'draft',
+        label: 'Review reminder to families who haven’t answered',
+        title: `${r.title}: are you in?`,
+        body: `Let us know${r.entryDeadline ? ` by ${r.entryDeadline}` : ' this week'}. Open Burgee and tap Interested or Going so coaches can plan.`,
+        audience: { kind: 'families', familyIds: fams, label: `${r.title}: no answer yet` },
+        channels: ['email', 'sms'],
+      })
+    }
+    return {
+      text:
+        `**${r.title}** (${r.date}${r.location ? `, ${r.location}` : ''}): **${r.going.length} going**, ${r.interested.length} interested, ${r.noAnswer.length} haven’t answered. Chaperones: ${r.chaperones}.\n\n` +
+        (r.going.length ? `Going:\n${list(r.going, 25)}\n\n` : '') +
+        (r.interested.length ? `Interested: ${r.interested.join(', ')}.\n\n` : '') +
+        (r.noAnswer.length ? `No answer yet: ${r.noAnswer.join(', ')}.` : '') +
+        (wantsMessage(q) && r.noAnswer.length ? '\n\nI drafted a reminder for you to review. Nothing has been sent.' : ''),
+      actions,
+    }
+  }
+
+  /* Progress and evaluations */
+  if (/move up|ready for|progress|skills?\b|evaluation|evals?\b|how (is|'s) \w+ doing|how.s \w+ doing/.test(q)) {
+    const kid = ctx.s.sailors.find((k) => new RegExp(`\\b${k.firstName.toLowerCase()}\\b`).test(q) && ctx.s.registrations.some((r) => r.sailorId === k.id && r.status === 'confirmed' && r.sessionId.endsWith('fall-26')))
+    const program = matchPrograms(q).length ? q : undefined
+    const res = progressInfo(ctx, { sailor: kid ? `${kid.firstName} ${kid.lastName}` : undefined, program })
+    actions.push({ kind: 'link', label: 'Open progress', href: '/admin/progress' })
+    if (kid && res.rows[0]) {
+      const r = res.rows[0]
+      return {
+        text:
+          `**${r.sailor}** (${r.team}): ${r.skills} ${r.track} skills${r.workingOn.length ? `, working on ${r.workingOn.join(', ').toLowerCase()}` : ''}. Evaluation: ${r.evaluation}.` +
+          (r.evaluationText ? `\n\n**Going well:** ${r.evaluationText.strengths}\n\n**Working on:** ${r.evaluationText.workOn}${r.evaluationText.nextStep ? `\n\n**Next step:** ${r.evaluationText.nextStep}` : ''}` : ''),
+        actions,
+      }
+    }
+    if (/evaluation|evals?\b/.test(q)) {
+      const missing = res.rows.filter((r) => r.evaluation === 'not written')
+      return { text: `**${missing.length} of ${res.rows.length}** fall team sailors don’t have an evaluation yet.\n\n${list(missing.map((r) => `${r.sailor} (${r.team})`), 15)}`, actions }
+    }
+    const ready = res.rows.filter((r) => r.readyToMoveUp)
+    const close = res.rows.filter((r) => !r.readyToMoveUp && Number(r.skills.split(' ')[0]) >= 6)
+    return {
+      text:
+        (ready.length ? `**Ready to move up** (every skill ticked off):\n${list(ready.map((r) => `${r.sailor}, ${r.track}`))}\n\n` : 'Nobody has every skill ticked off yet.\n\n') +
+        (close.length ? `**Close** (6 or more of 8):\n${list(close.map((r) => `${r.sailor} (${r.skills})`), 12)}` : ''),
+      actions,
+    }
+  }
+
   /* Incidents */
   if (/incident|injur|accident|near.?miss|hurt|capsiz/.test(q)) {
     const res = incidentsInfo(ctx, { status: /open|unresolved|follow/.test(q) ? 'open' : 'all' })
@@ -172,7 +244,7 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
 
   /* Swim checks */
   if (/swim\s*(check|test)|passed (the |a )?swim|can.?t swim/.test(q) && !/\bforms?\b|sign/.test(q)) {
-    // "swim check" isn't the Swim Clinic: drop the phrase before reading the scope.
+    // Drop the phrase "swim check" before reading the scope.
     const sc = scopeOf(q.replace(/swim\s*(check|test)s?|passed (the |a )?swim|can.?t swim/g, ''))
     const res = swimChecksInfo(ctx, sc)
     if (!res.needSwimCheck) return { text: `Everyone registered${sc.program || sc.week ? ' there' : ''} has passed a swim check.`, actions }

@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/data/store'
 import { BurgeeMark } from './marks'
+import { PortalRootContext } from './portal-root'
 import { RoleSwitcher } from './role-switcher'
 
 export type PhoneTab = {
@@ -28,7 +30,9 @@ export function PhoneShell({
 }) {
   const path = useLocation({ select: (l) => l.pathname })
   const clubName = useStore((s) => s.settings.clubName)
+  const [portal, setPortal] = useState<HTMLElement | null>(null)
   return (
+    <PortalRootContext.Provider value={portal}>
     <div className='min-h-svh bg-background md:flex md:items-center md:justify-center md:gap-16 md:bg-mist md:p-6'>
       <aside className='hidden max-w-xs text-muted-foreground lg:block'>
         <BurgeeMark className='size-10 text-heading' />
@@ -39,7 +43,7 @@ export function PhoneShell({
         </div>
       </aside>
 
-      <div className='relative flex min-h-svh w-full flex-col bg-background md:h-[min(860px,calc(100svh-3rem))] md:min-h-0 md:max-w-[400px] md:overflow-hidden md:rounded-[2.25rem] md:border md:border-border md:shadow-[0_40px_80px_-30px_rgb(20_53_90/0.45)] md:ring-[10px] md:ring-card'>
+      <div className='relative flex min-h-svh w-full flex-col bg-background md:h-[min(860px,calc(100svh-3rem))] md:min-h-0 md:max-w-[400px] md:overflow-hidden md:rounded-[2.25rem] md:border md:border-border md:shadow-[0_40px_80px_-30px_rgb(20_53_90/0.45)] md:ring-[10px] md:ring-card md:[transform:translateZ(0)]'>
         <header className='sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-2.5 backdrop-blur'>
           <BurgeeMark className='size-6 text-heading' />
           <span className='min-w-0 flex-1 truncate text-sm font-semibold'>{clubName}</span>
@@ -82,7 +86,10 @@ export function PhoneShell({
             })}
           </ul>
         </nav>
+        {/* Sheets and dialogs mount here; the transform above keeps them inside the frame on a laptop. */}
+        <div ref={setPortal} />
       </div>
     </div>
+    </PortalRootContext.Provider>
   )
 }
