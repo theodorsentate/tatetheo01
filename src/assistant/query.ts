@@ -19,6 +19,7 @@ import {
 } from '@/domain/rules'
 import type { Audience, Channel, ClubSettings, Level, Session } from '@/domain/types'
 import { waitlistFor } from '@/domain/waitlist'
+import { attendanceKey, attendanceRecord, dayCounts, latestSwimCheck, meetsOn, practiceDates, requestProgress, STATUS_LABEL } from '@/domain/attendance'
 
 export type ClubSnapshot = DemoState & { settings: ClubSettings }
 export type Ctx = { s: ClubSnapshot; now: Date }
@@ -285,6 +286,12 @@ export function sailorsInfo(
         family: famById.get(k.familyId)!.name,
         familyHref: familyHref(k.familyId),
         medicalAlerts: k.medicalAlerts,
+        parentNote: k.parentNote?.text,
+        authorizedPickups: k.authorizedPickups ?? [],
+        swimCheck: (() => {
+          const sc = latestSwimCheck(s.swimChecks, k.id)
+          return sc ? `${sc.result} ${d(sc.date)} (${sc.by})` : 'not done'
+        })(),
         emergencyContact: medForm ? `${medForm.values.emergencyName} ${medForm.values.emergencyPhone}` : undefined,
         formsMissing: missing,
         registrations: activeRegs
@@ -423,6 +430,72 @@ export function formsInfo(ctx: Ctx, q: { form?: string; program?: string; term?:
   }
 }
 
+/** Today's attendance (live) and season attendance problems for team sessions. */
+export function attendanceInfo(ctx: Ctx, q: { program?: string; term?: string; week?: string | number }) {
+  const { s, now } = ctx
+  const today = format(now, 'yyyy-MM-dd')
+  const sessions = (q.program || q.term || q.week ? findSessions(ctx, q) : s.sessions).filter((x) => today >= x.startDate && today <= x.endDate)
+  const all = Object.values(s.attendance)
+  const sailorById = new Map(s.sailors.map((x) => [x.id, x]))
+  const name = (id: string) => `${sailorById.get(id)!.firstName} ${sailorById.get(id)!.lastName}`
+  return {
+    date: format(now, 'EEE MMM d'),
+    sessions: sessions.map((se) => {
+      const ids = s.registrations.filter((r) => r.sessionId === se.id && r.status === 'confirmed').map((r) => r.sailorId)
+      const todays = ids.map((id) => s.attendance[attendanceKey(today, se.id, id)]).filter(Boolean)
+      const dates = practiceDates(se, now).filter((x) => x < today)
+      const c = dayCounts(todays, ids)
+      return {
+        session: sessionLabel(se),
+        href: sessionHref(se),
+        practiceToday: meetsOn(se, now),
+        today: {
+          onTheWater: todays.filter((e) => e.status === 'on-water').map((e) => name(e.sailorId)),
+          here: todays.filter((e) => e.status === 'present' || e.status === 'ashore').map((e) => name(e.sailorId)),
+          absent: todays.filter((e) => e.status === 'absent').map((e) => name(e.sailorId)),
+          wentHome: todays.filter((e) => e.status === 'picked-up').map((e) => `${name(e.sailorId)} with ${e.pickedUpBy}`),
+          notCheckedIn: c.notIn,
+        },
+        attendanceConcerns: ids
+          .map((id) => ({ id, rec: attendanceRecord(all, id, se.id, dates) }))
+          .filter((x) => x.rec.missedLast3 || (x.rec.rate !== undefined && x.rec.rate < 0.7))
+          .map((x) => `${name(x.id)}: ${x.rec.attended}/${x.rec.attended + x.rec.missed} practices${x.rec.missedLast3 ? ', missed the last 3' : ''}`),
+      }
+    }),
+    statusLabels: STATUS_LABEL,
+  }
+}
+
+/** Registered sailors (in water programs) without a passed swim check. */
+export function swimChecksInfo(ctx: Ctx, q: { program?: string; term?: string; week?: string | number }) {
+  const { s } = ctx
+  const sessionIds = new Set((q.program || q.term || q.week ? findSessions(ctx, q) : s.sessions).filter((x) => programById.get(x.programId)!.activity !== 'tennis').map((x) => x.id))
+  const ids = new Set(s.registrations.filter((r) => ACTIVE_STATUSES.has(r.status) && sessionIds.has(r.sessionId)).map((r) => r.sailorId))
+  const rows = [...ids]
+    .map((id) => s.sailors.find((k) => k.id === id)!)
+    .map((k) => ({ k, sc: latestSwimCheck(s.swimChecks, k.id) }))
+    .filter((x) => x.sc?.result !== 'passed')
+    .map(({ k, sc }) => ({ sailor: `${k.firstName} ${k.lastName}`, familyHref: familyHref(k.familyId), status: sc ? `did not pass ${d(sc.date)}` : 'not done' }))
+  return { sailorsChecked: ids.size, needSwimCheck: rows.length, rows: rows.slice(0, 50) }
+}
+
+/** Forms the director pushed to families and how many have signed. */
+export function formRequestsInfo(ctx: Ctx) {
+  const { s } = ctx
+  const templates = [...FORM_TEMPLATES, ...s.customTemplates]
+  return s.formRequests.map((r) => {
+    const t = templates.find((x) => x.id === r.templateId)!
+    const p = requestProgress(r, t, s.submissions, s.settings.season)
+    const unsigned = r.sailorIds
+      .filter((sid) => !s.submissions.some((x) => x.templateId === t.id && x.sailorId === sid))
+      .map((sid) => {
+        const k = s.sailors.find((x) => x.id === sid)!
+        return `${k.firstName} ${k.lastName}`
+      })
+    return { form: t.name, sentTo: r.audienceLabel, sent: format(new Date(r.sentAt), 'MMM d'), due: r.dueDate ? d(r.dueDate) : undefined, signed: p.done, of: p.total, notSignedYet: unsigned.slice(0, 40), formsPage: '/admin/forms' }
+  })
+}
+
 /** Live "needs attention" list — the same items the Today page shows. */
 export function briefing(ctx: Ctx) {
   const certs = staffCertifications(ctx, { status: 'needs-action' }).rows.map(
@@ -476,5 +549,7 @@ export function audienceText(a: Audience, ctx: Ctx): string {
     }
     case 'group':
       return 'one group'
+    case 'families':
+      return a.label
   }
 }

@@ -6,6 +6,7 @@ import { FORM_TEMPLATES } from '@/data/catalog'
 import { familyRegs, programById, termById, useLookups, useWaitlistPosition } from '@/data/hooks'
 import { useStore } from '@/data/store'
 import { money } from '@/domain/pricing'
+import { latestSwimCheck } from '@/domain/attendance'
 import { ageOn, outstandingForms } from '@/domain/rules'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -96,6 +97,7 @@ function FamilySheet({ familyId, onClose }: { familyId?: string; onClose: () => 
   const submissions = useStore((s) => s.submissions)
   const season = useStore((s) => s.settings.season)
   const positions = useWaitlistPosition()
+  const swimChecks = useStore((s) => s.swimChecks)
   const f = familyId ? look.family.get(familyId) : undefined
   const kids = f ? sailors.filter((s) => s.familyId === f.id) : []
   const fr = f ? familyRegs(regs, sailors, f.id).sort((a, b) => look.session.get(a.sessionId)!.startDate.localeCompare(look.session.get(b.sessionId)!.startDate)) : []
@@ -154,6 +156,19 @@ function FamilySheet({ familyId, onClose }: { familyId?: string; onClose: () => 
                         <HeartPulse className='size-4' /> {k.medicalAlerts.join(', ')}
                       </p>
                     )}
+                    {k.parentNote && (
+                      <p className='mb-2 rounded-md bg-muted px-3 py-2 text-sm'>
+                        <span className='block text-xs text-muted-foreground'>Note from {k.parentNote.by.split(' ')[0]}</span>
+                        {k.parentNote.text}
+                      </p>
+                    )}
+                    <p className='mb-2 text-xs text-muted-foreground'>
+                      Pickup: guardians{k.authorizedPickups?.length ? `, ${k.authorizedPickups.join(', ')}` : ' only'}.{' '}
+                      {(() => {
+                        const sc = latestSwimCheck(swimChecks, k.id)
+                        return sc?.result === 'passed' ? `Swim check passed ${sc.date}.` : 'No swim check yet.'
+                      })()}
+                    </p>
                     <p className='mb-2 text-sm text-muted-foreground'>
                       {due.length ? (
                         <span className='text-signal'>Missing {due.map((d) => d.short.toLowerCase()).join(', ')}</span>

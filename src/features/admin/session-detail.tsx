@@ -37,6 +37,7 @@ import {
 } from '@/domain/rules'
 import type { Group, Sailor } from '@/domain/types'
 import { waitlistFor } from '@/domain/waitlist'
+import { attendanceRecord, dayCounts, latestSwimCheck, practiceDates, STATUS_LABEL } from '@/domain/attendance'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -89,7 +90,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
           <span className='mt-1 w-1.5 shrink-0 rounded-full' style={{ background: program.color }} aria-hidden='true' />
           <div>
             <p className='text-sm text-muted-foreground'>{term.name}</p>
-            <h1 className='text-2xl font-bold'>
+            <h1 className='text-2xl font-semibold'>
               {program.name}, {session.name}
             </h1>
             <p className='mt-1 text-sm text-muted-foreground'>
@@ -114,6 +115,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
           <TabsTrigger value='waitlist'>
             Waitlist{st.waitlist + st.offers > 0 ? ` (${st.waitlist + st.offers})` : ''}
           </TabsTrigger>
+          <TabsTrigger value='attendance'>Attendance</TabsTrigger>
           <TabsTrigger value='registrations'>All registrations</TabsTrigger>
         </TabsList>
         <TabsContent value='roster' className='mt-6'>
@@ -121,6 +123,9 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         </TabsContent>
         <TabsContent value='waitlist' className='mt-6'>
           <WaitlistPanel sessionId={session.id} />
+        </TabsContent>
+        <TabsContent value='attendance' className='mt-6'>
+          <AttendancePanel sessionId={session.id} />
         </TabsContent>
         <TabsContent value='registrations' className='mt-6'>
           <SessionRegistrations sessionId={session.id} />
@@ -608,6 +613,112 @@ function SessionRegistrations({ sessionId }: { sessionId: string }) {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+/* ───────────────────────── Attendance ───────────────────────── */
+
+function AttendancePanel({ sessionId }: { sessionId: string }) {
+  const look = useLookups()
+  const session = look.session.get(sessionId)!
+  const regs = useStore((s) => s.registrations)
+  const attendance = useStore((s) => s.attendance)
+  const swimChecks = useStore((s) => s.swimChecks)
+  const now = useNow()
+  const today = format(now, 'yyyy-MM-dd')
+  const dates = practiceDates(session, now)
+  const shown = dates.slice(-10)
+  const all = Object.values(attendance).filter((e) => e.sessionId === sessionId)
+  const kids = regs
+    .filter((r) => r.sessionId === sessionId && r.status === 'confirmed')
+    .map((r) => look.sailor.get(r.sailorId)!)
+    .sort((a, b) => a.lastName.localeCompare(b.lastName))
+  const todays = all.filter((e) => e.date === today)
+  const counts = dayCounts(todays, kids.map((k) => k.id))
+
+  if (!dates.length)
+    return (
+      <EmptyState title='No sessions have run yet'>
+        Coaches take attendance from their phones starting {format(new Date(`${session.startDate}T12:00:00`), 'MMMM d')}. It shows up here live.
+      </EmptyState>
+    )
+
+  return (
+    <div className='space-y-4'>
+      {dates.includes(today) && (
+        <p className='flex flex-wrap gap-x-6 gap-y-1 rounded-lg border bg-card px-4 py-3 text-sm'>
+          <span className='font-medium'>Today</span>
+          <span>{counts.present + counts.ashore} here</span>
+          <span className={counts.onWater ? 'font-semibold text-signal' : ''}>{counts.onWater} on the water</span>
+          <span>{counts.pickedUp} gone home</span>
+          <span>{counts.absent} absent</span>
+          <span className='text-muted-foreground'>{counts.notIn} not checked in</span>
+        </p>
+      )}
+      <div className='overflow-x-auto rounded-lg border bg-card'>
+        <table className='w-full min-w-[720px] text-sm'>
+          <thead className='border-b text-xs text-muted-foreground'>
+            <tr>
+              <th className='px-4 py-2 text-start font-medium'>Sailor</th>
+              {shown.map((d) => (
+                <th key={d} className='px-1 py-2 text-center font-medium'>
+                  {format(new Date(`${d}T12:00:00`), 'M/d')}
+                </th>
+              ))}
+              <th className='px-4 py-2 text-end font-medium'>Season</th>
+              <th className='px-4 py-2 text-start font-medium'>Swim check</th>
+            </tr>
+          </thead>
+          <tbody className='divide-y'>
+            {kids.map((k) => {
+              const rec = attendanceRecord(all, k.id, sessionId, dates.filter((d) => d < today))
+              const sc = latestSwimCheck(swimChecks, k.id)
+              return (
+                <tr key={k.id}>
+                  <td className='px-4 py-2'>
+                    <span className='font-medium'>
+                      {k.firstName} {k.lastName}
+                    </span>
+                    {rec.missedLast3 && <span className='ms-2 text-xs font-medium text-destructive'>missed last 3</span>}
+                  </td>
+                  {shown.map((d) => {
+                    const e = all.find((x) => x.date === d && x.sailorId === k.id)
+                    const label = e ? STATUS_LABEL[e.status] : 'Not marked'
+                    return (
+                      <td key={d} className='px-1 py-2 text-center'>
+                        <span
+                          title={`${d}: ${label}${e?.pickedUpBy ? `, with ${e.pickedUpBy}` : ''}`}
+                          className={cn(
+                            'inline-block size-3 rounded-full',
+                            !e ? 'bg-border' : e.status === 'absent' ? 'bg-destructive/70' : e.status === 'on-water' ? 'bg-signal' : 'bg-ok'
+                          )}
+                        >
+                          <span className='sr-only'>{label}</span>
+                        </span>
+                      </td>
+                    )
+                  })}
+                  <td className='px-4 py-2 text-end'>
+                    {rec.rate === undefined ? '—' : `${Math.round(rec.rate * 100)}%`}
+                    <span className='block text-xs text-muted-foreground'>
+                      {rec.attended}/{rec.attended + rec.missed}
+                    </span>
+                  </td>
+                  <td className='px-4 py-2 text-xs'>
+                    {sc?.result === 'passed' ? (
+                      <span className='text-ok'>Passed {format(new Date(`${sc.date}T12:00:00`), 'MMM d')}</span>
+                    ) : (
+                      <span className='font-medium text-signal'>{sc ? 'Retest needed' : 'Not done'}</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className='text-xs text-muted-foreground'>Green: attended. Red: absent. Amber: on the water right now. Grey: not marked.</p>
     </div>
   )
 }

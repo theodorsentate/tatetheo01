@@ -105,6 +105,51 @@ export type Sailor = {
   shirtSize: 'YS' | 'YM' | 'YL' | 'AS' | 'AM' | 'AL'
   /** Short flags surfaced on rosters (from the medical form). */
   medicalAlerts: string[]
+  /** Free-text note a parent writes for coaches ("nervous in big breeze"). */
+  parentNote?: { text: string; updatedAt: ISODateTime; by: string }
+  /** People other than guardians allowed to pick this sailor up. */
+  authorizedPickups?: string[]
+}
+
+/* ───────────── Attendance & safety ───────────── */
+
+/** Check-in → on the water → ashore → picked up. */
+export type AttendanceStatus = 'present' | 'absent' | 'on-water' | 'ashore' | 'picked-up'
+
+export type AttendanceEntry = {
+  sailorId: ID
+  sessionId: ID
+  date: ISODate
+  status: AttendanceStatus
+  updatedAt: ISODateTime
+  by: string
+  /** Who the sailor went home with. */
+  pickedUpBy?: string
+  launchedAt?: ISODateTime
+}
+
+export type SwimCheck = {
+  sailorId: ID
+  result: 'passed' | 'not-passed'
+  date: ISODate
+  by: string
+  note?: string
+}
+
+/** A form the director pushed to families, with a due date. */
+export type FormRequest = {
+  id: ID
+  templateId: ID
+  /** Who it was sent to, resolved at send time. */
+  familyIds: ID[]
+  /** For per-sailor forms: which sailors need to sign. */
+  sailorIds: ID[]
+  audienceLabel: string
+  dueDate?: ISODate
+  message: string
+  channels: Channel[]
+  sentAt: ISODateTime
+  sentBy: string
 }
 
 export type RegistrationStatus =
@@ -197,6 +242,9 @@ export type FormTemplate = {
   /** Per-sailor forms are signed once per sailor; family forms once per family. */
   scope: 'sailor' | 'family'
   requiresSignature: boolean
+  /** Season forms every registered sailor needs. One-off forms (permission slips) are only due when sent. */
+  required?: boolean
+  custom?: boolean
 }
 
 export type FormSubmission = {
@@ -220,6 +268,8 @@ export type Audience =
   | { kind: 'staff' }
   | { kind: 'outstanding-forms' }
   | { kind: 'waitlisted' }
+  /** An explicit list, e.g. the families a form was sent to. */
+  | { kind: 'families'; familyIds: ID[]; label: string }
 
 export type Announcement = {
   id: ID

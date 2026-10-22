@@ -44,9 +44,9 @@ export function AppSidebar() {
     <Sidebar collapsible={collapsible} variant={variant}>
       <SidebarHeader className='px-3 pt-4'>
         <Link to='/admin' className='flex items-center gap-2.5 rounded-md px-1 py-1 text-sidebar-primary'>
-          <BurgeeMark className='size-8 shrink-0' />
+          <BurgeeMark className='size-8 shrink-0 text-heading' />
           <span className='grid leading-tight group-data-[collapsible=icon]:hidden'>
-            <span className='font-display text-base font-bold'>Burgee</span>
+            <span className='font-display text-base font-semibold'>Burgee</span>
             <span className='truncate text-xs text-sidebar-foreground'>{settings.clubName}</span>
           </span>
         </Link>
@@ -57,7 +57,7 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
       <SidebarFooter className='border-t border-sidebar-border group-data-[collapsible=icon]:hidden'>
-        <RoleSwitcher variant='dark' className='w-full' />
+        <RoleSwitcher className='w-full' />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

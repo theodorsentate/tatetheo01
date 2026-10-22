@@ -18,12 +18,29 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Expanded Archivo for headings — reads like transom lettering. */
+  /* Expanded Archivo for headings — reads like transom lettering — in navy, not black. */
   h1,
   h2,
   .font-display {
-    font-stretch: 118%;
-    letter-spacing: -0.01em;
+    font-stretch: 116%;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  h1,
+  h2,
+  h3 {
+    color: var(--heading);
+  }
+
+  /* Cards float a little off the sailcloth. */
+  .bg-card.border,
+  .bg-card[class*='ring-'] {
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Active nav item: a brass hairline, like a burgee's stripe. */
+  [data-sidebar='menu-button'][data-active='true'] {
+    box-shadow: inset 3px 0 0 var(--brass);
   }
 
   @media (prefers-reduced-motion: reduce) {

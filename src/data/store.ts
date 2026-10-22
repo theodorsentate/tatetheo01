@@ -3,9 +3,11 @@ import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { ACTIVE_STATUSES, quoteCart, type CartItem } from '@/domain/pricing'
 import { autoGroups } from '@/domain/rules'
+import { attendanceKey } from '@/domain/attendance'
 import type {
   ActivityEvent,
   Announcement,
+  AttendanceStatus,
   Audience,
   ClubSettings,
   FormSubmission,
@@ -13,9 +15,12 @@ import type {
   Registration,
   Sailor,
   Session,
+  FormRequest,
+  FormTemplate,
+  SwimCheck,
 } from '@/domain/types'
 import { expiredOffers, offersToIssue, seatsLeft } from '@/domain/waitlist'
-import { CERT_TYPES, DEFAULT_SETTINGS, PROGRAMS, TERMS } from './catalog'
+import { CERT_TYPES, DEFAULT_SETTINGS, FORM_TEMPLATES, PROGRAMS, TERMS } from './catalog'
 import { createSeed, type DemoState } from './seed'
 
 /**
@@ -68,8 +73,20 @@ type Actions = {
   sendAnnouncement: (a: Omit<Announcement, 'id' | 'sentAt' | 'opened' | 'recipients'>) => number
   sendFormReminders: (familyIds: string[]) => void
 
+  sendFormRequest: (r: Omit<FormRequest, 'id' | 'sentAt'>) => void
+  createTemplate: (t: Omit<FormTemplate, 'id'>) => FormTemplate
+
   // Coach-side
   renewCert: (coachId: string, certTypeId: string, issued: string) => void
+  markAttendance: (
+    date: string,
+    sessionId: string,
+    sailorIds: string[],
+    status: AttendanceStatus,
+    extra?: { by: string; pickedUpBy?: string }
+  ) => void
+  clearAttendance: (date: string, sessionId: string, sailorId: string) => void
+  recordSwimCheck: (c: SwimCheck) => void
 }
 
 const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 9)}`
@@ -186,6 +203,8 @@ export function audienceFamilyIds(audience: Audience, s: DemoState, season: stri
           .map(famOf)
       )
     }
+    case 'families':
+      return audience.familyIds
     case 'staff':
       return []
   }
@@ -458,10 +477,82 @@ export const useStore = create<State & Actions>()(
         return recipients
       },
 
-      sendFormReminders: (familyIds) =>
-        set((s) => ({
-          events: [event('announcement', `Form reminders sent to ${familyIds.length} families`), ...s.events],
-        })),
+      sendFormReminders: (familyIds) => {
+        get().sendAnnouncement({
+          title: `Reminder: ${get().settings.season} forms`,
+          body: 'Your sailor is still missing one or more season forms. It takes about a minute from your phone in Burgee, and sailors need them on file before their next session.',
+          category: 'reminder',
+          audience: { kind: 'families', familyIds, label: 'Families with forms due' },
+          channels: ['email', 'sms'],
+          sentBy: 'Jordan Hale',
+        })
+      },
+
+      sendFormRequest: (r) =>
+        set((s) => {
+          const template = [...s.customTemplates, ...FORM_TEMPLATES].find((t) => t.id === r.templateId)
+          const req: FormRequest = { ...r, id: uid('req'), sentAt: new Date().toISOString() }
+          const ann: Announcement = {
+            id: uid('a'),
+            title: `Please sign: ${template?.name ?? 'a form'}`,
+            body: `${r.message}${r.dueDate ? ` Due ${format(new Date(`${r.dueDate}T12:00:00`), 'MMMM d')}.` : ''} Sign it from your phone in Burgee.`,
+            category: 'reminder',
+            audience: { kind: 'families', familyIds: r.familyIds, label: r.audienceLabel },
+            channels: r.channels,
+            sentAt: req.sentAt,
+            sentBy: r.sentBy,
+            recipients: r.familyIds.length,
+            opened: 0,
+          }
+          return {
+            formRequests: [req, ...s.formRequests],
+            announcements: [ann, ...s.announcements],
+            events: [event('announcement', `${template?.name ?? 'Form'} sent to ${r.familyIds.length} families for signature`), ...s.events],
+          }
+        }),
+
+      createTemplate: (t) => {
+        const tpl: FormTemplate = { ...t, id: uid('form') }
+        set((s) => ({ customTemplates: [tpl, ...s.customTemplates] }))
+        return tpl
+      },
+
+      markAttendance: (date, sessionId, sailorIds, status, extra) =>
+        set((s) => {
+          const attendance = { ...s.attendance }
+          const nowIso = new Date().toISOString()
+          for (const sid of sailorIds) {
+            const key = attendanceKey(date, sessionId, sid)
+            const prev = attendance[key]
+            attendance[key] = {
+              sailorId: sid,
+              sessionId,
+              date,
+              status,
+              updatedAt: nowIso,
+              by: extra?.by ?? 'Coach',
+              pickedUpBy: status === 'picked-up' ? extra?.pickedUpBy : undefined,
+              launchedAt: status === 'on-water' ? (prev?.launchedAt ?? nowIso) : prev?.launchedAt,
+            }
+          }
+          return { attendance }
+        }),
+
+      clearAttendance: (date, sessionId, sailorId) =>
+        set((s) => {
+          const attendance = { ...s.attendance }
+          delete attendance[attendanceKey(date, sessionId, sailorId)]
+          return { attendance }
+        }),
+
+      recordSwimCheck: (c) =>
+        set((s) => {
+          const k = s.sailors.find((x) => x.id === c.sailorId)
+          return {
+            swimChecks: [c, ...s.swimChecks.filter((x) => !(x.sailorId === c.sailorId && x.date === c.date))],
+            events: [event('form-signed', `${k?.firstName} ${k?.lastName} ${c.result === 'passed' ? 'passed' : 'did not pass'} a swim check with ${c.by}`), ...s.events],
+          }
+        }),
 
       renewCert: (coachId, certTypeId, issued) =>
         set((s) => {
@@ -479,7 +570,9 @@ export const useStore = create<State & Actions>()(
     {
       name: 'burgee-demo-v1',
       storage: createJSONStorage(() => safeStorage),
-      version: 1,
+      version: 2,
+      // Demo data shape changed: start older saved demos fresh.
+      migrate: () => fresh() as never,
     }
   )
 )

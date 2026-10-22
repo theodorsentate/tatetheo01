@@ -15,12 +15,13 @@ export const Route = createFileRoute('/coach')({
           title: 'The coach view',
           body: (
             <>
-              <p>Built for the dock: big type, one hand, bright sun.</p>
+              <p>Built for the dock: big buttons, one hand, bright sun.</p>
               <p>
-                Coaches see only their own groups, with allergies and medical notes up front, a tap-to-call for every
-                guardian, and a one-tap weather call to their families.
+                Coaches take attendance as sailors arrive, launch them, and bring everyone ashore with a live count of
+                who is still on the water. Nobody launches without a passed swim check, and sailors only go home with
+                someone on their family’s pickup list.
               </p>
-              <p>Certification renewals get uploaded here, so the director never chases paper cards again.</p>
+              <p>Allergies, parent notes and a tap-to-call for every guardian sit right on the roster.</p>
             </>
           ),
         }}

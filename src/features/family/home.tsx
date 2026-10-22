@@ -1,14 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
-import { ChevronRight, ClipboardList, Clock, CreditCard, HeartPulse } from 'lucide-react'
+import { ChevronRight, ClipboardList, Clock, CreditCard, HeartPulse, Plus, Waves, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { FORM_TEMPLATES, PERSONAS } from '@/data/catalog'
 import { familyRegs, programById, termById, useLookups, useNow, useWaitlistPosition } from '@/data/hooks'
 import { useStore } from '@/data/store'
-import { money } from '@/domain/pricing'
-import { ageOn, outstandingForms } from '@/domain/rules'
-import type { Announcement, Registration } from '@/domain/types'
+import { cn } from '@/lib/utils'
+import { latestSwimCheck, pendingForFamily } from '@/domain/attendance'
+import { ACTIVE_STATUSES, money } from '@/domain/pricing'
+import { ageOn } from '@/domain/rules'
+import type { Announcement, Registration, Sailor } from '@/domain/types'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { MessageList } from '@/features/coach/coach'
@@ -23,12 +28,30 @@ export function useFamily() {
   return { family, kids }
 }
 
+/** Season forms plus any one-off forms the club has created. */
+export function useAllTemplates() {
+  const custom = useStore((s) => s.customTemplates)
+  return useMemo(() => [...FORM_TEMPLATES, ...custom], [custom])
+}
+
+/** Everything the persona family still has to sign, with due dates. */
+export function useFamilyPending() {
+  const { family, kids } = useFamily()
+  const regs = useStore((s) => s.registrations)
+  const submissions = useStore((s) => s.submissions)
+  const requests = useStore((s) => s.formRequests)
+  const season = useStore((s) => s.settings.season)
+  const templates = useAllTemplates()
+  return useMemo(() => {
+    const active = new Set(regs.filter((r) => ACTIVE_STATUSES.has(r.status)).map((r) => r.sailorId))
+    return pendingForFamily({ familyId: family.id, kids, activeSailorIds: active, templates, submissions, requests, season })
+  }, [family.id, kids, regs, submissions, requests, season, templates])
+}
+
 export function FamilyHome() {
   const { family, kids } = useFamily()
   const regs = useStore((s) => s.registrations)
   const sailors = useStore((s) => s.sailors)
-  const submissions = useStore((s) => s.submissions)
-  const season = useStore((s) => s.settings.season)
   const announcements = useStore((s) => s.announcements)
   const accept = useStore((s) => s.acceptOffer)
   const decline = useStore((s) => s.declineOffer)
@@ -41,9 +64,16 @@ export function FamilyHome() {
   const mine = familyRegs(regs, sailors, family.id)
   const offers = mine.filter((r) => r.status === 'offered')
   const due = mine.filter((r) => r.status === 'pending-payment')
-  const formsDue = kids
-    .map((k) => ({ k, forms: outstandingForms(k, FORM_TEMPLATES, submissions, season) }))
-    .filter((x) => x.forms.length && mine.some((r) => r.sailorId === x.k.id && r.status !== 'cancelled'))
+  const pending = useFamilyPending()
+  const soonest = pending.map((p) => p.dueDate).filter(Boolean).sort()[0]
+  const attendance = useStore((s) => s.attendance)
+  const swimChecks = useStore((s) => s.swimChecks)
+  const [notesFor, setNotesFor] = useState<Sailor | null>(null)
+  const todayIso = format(now, 'yyyy-MM-dd')
+  const todayStatus = (sid: string) =>
+    Object.values(attendance)
+      .filter((e) => e.sailorId === sid && e.date === todayIso)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
   const guardian = family.guardians[0]
   const familyMessages = useFamilyMessages(announcements)
 
@@ -55,12 +85,12 @@ export function FamilyHome() {
 
   return (
     <div className='px-4 py-5'>
-      <h1 className='text-2xl font-bold'>Hi, {guardian.name.split(' ')[0]}</h1>
+      <h1 className='text-2xl font-semibold'>Hi, {guardian.name.split(' ')[0]}</h1>
       <p className='text-sm text-muted-foreground'>
         The {family.name} family{family.membership === 'member' ? `, member ${family.memberNumber}` : ''}
       </p>
 
-      {(offers.length > 0 || due.length > 0 || formsDue.length > 0) && (
+      {(offers.length > 0 || due.length > 0 || pending.length > 0) && (
         <section className='mt-5 space-y-3' aria-label='To do'>
           {offers.map((r) => {
             const { se, p, sailor } = describe(r)
@@ -107,15 +137,16 @@ export function FamilyHome() {
               </Button>
             </div>
           )}
-          {formsDue.length > 0 && (
+          {pending.length > 0 && (
             <Link to='/family/forms' className='flex items-center gap-3 rounded-lg border bg-card p-4'>
               <ClipboardList className='size-5 shrink-0 text-muted-foreground' />
               <span className='min-w-0 flex-1'>
                 <span className='block font-medium'>
-                  {formsDue.reduce((s, x) => s + x.forms.length, 0)} forms to sign
+                  {pending.length} {pending.length === 1 ? 'form' : 'forms'} to sign
+                  {soonest && <span className='font-normal text-signal'>, first due {format(new Date(`${soonest}T12:00:00`), 'MMM d')}</span>}
                 </span>
                 <span className='block text-sm text-muted-foreground'>
-                  {formsDue.map((x) => `${x.k.firstName}: ${x.forms.map((f) => f.short.toLowerCase()).join(', ')}`).join('. ')}
+                  {pending.map((p) => `${p.template.short}${p.sailor ? ` (${p.sailor.firstName})` : ''}`).join(', ')}
                 </span>
               </span>
               <ChevronRight className='size-4 text-muted-foreground' />
@@ -147,11 +178,41 @@ export function FamilyHome() {
                   </div>
                   <FleetChip level={k.level} size='md' />
                 </header>
-                {k.medicalAlerts.length > 0 && (
-                  <p className='flex items-center gap-1.5 border-b px-4 py-2 text-xs text-muted-foreground'>
-                    <HeartPulse className='size-3.5 text-destructive' /> Coaches see: {k.medicalAlerts.join(', ')}
+                {(() => {
+                  const t = todayStatus(k.id)
+                  if (!t) return null
+                  const time = format(new Date(t.status === 'on-water' && t.launchedAt ? t.launchedAt : t.updatedAt), 'h:mm a')
+                  const text =
+                    t.status === 'on-water' ? `On the water since ${time}` : t.status === 'ashore' ? `Back ashore at ${time}` : t.status === 'present' ? `Checked in at ${time}` : t.status === 'picked-up' ? `Went home with ${t.pickedUpBy} at ${time}` : 'Marked absent today'
+                  return (
+                    <p className={cn('flex items-center gap-1.5 border-b px-4 py-2 text-sm font-medium', t.status === 'on-water' ? 'bg-signal-soft text-signal' : 'bg-ok-soft text-ok')}>
+                      <Waves className='size-4' /> {text}
+                    </p>
+                  )
+                })()}
+                <div className='space-y-1.5 border-b px-4 py-3 text-sm'>
+                  <div className='flex items-start justify-between gap-3'>
+                    <p className='text-xs font-medium text-muted-foreground'>For {k.firstName}’s coaches</p>
+                    <button className='text-xs font-medium text-primary' onClick={() => setNotesFor(k)}>
+                      {k.parentNote ? 'Edit' : 'Add a note'}
+                    </button>
+                  </div>
+                  {k.parentNote ? <p>{k.parentNote.text}</p> : <p className='text-muted-foreground'>Anything coaches should know: nerves, glasses, early pickups.</p>}
+                  {k.medicalAlerts.length > 0 && (
+                    <p className='flex items-center gap-1.5 text-xs text-muted-foreground'>
+                      <HeartPulse className='size-3.5 text-destructive' /> From the medical form: {k.medicalAlerts.join(', ')}
+                    </p>
+                  )}
+                  <p className='text-xs text-muted-foreground'>
+                    Pickup: guardians{k.authorizedPickups?.length ? `, ${k.authorizedPickups.join(', ')}` : ' only'}.{' '}
+                    {(() => {
+                      const sc = latestSwimCheck(swimChecks, k.id)
+                      return sc?.result === 'passed'
+                        ? `Swim check passed ${format(new Date(`${sc.date}T12:00:00`), 'MMM d')}.`
+                        : 'Swim check: coaches will do it at the first session.'
+                    })()}
                   </p>
-                )}
+                </div>
                 <ul className='divide-y'>
                   {kr.map((r) => {
                     const { se, p } = describe(r)
@@ -191,6 +252,8 @@ export function FamilyHome() {
           <MessageList items={familyMessages.slice(0, 2)} empty='No messages yet' />
         </div>
       </section>
+
+      <NotesSheet sailor={notesFor} onClose={() => setNotesFor(null)} />
 
       <Sheet open={!!paying} onOpenChange={(o) => !o && setPaying(null)}>
         <SheetContent side='bottom' className='max-h-[90svh] overflow-y-auto rounded-t-2xl'>
@@ -257,6 +320,8 @@ export function useFamilyMessages(announcements: Announcement[]) {
           return true
         case 'waitlisted':
           return mine.some((r) => r.status === 'waitlisted')
+        case 'families':
+          return a.audience.familyIds.includes(PERSONAS.familyId)
         case 'program':
           return programIds.has(a.audience.programId)
         case 'session':
@@ -277,9 +342,89 @@ export function FamilyMessages() {
   const items = useFamilyMessages(announcements)
   return (
     <div className='py-5'>
-      <h1 className='px-4 text-2xl font-bold'>Messages</h1>
+      <h1 className='px-4 text-2xl font-semibold'>Messages</h1>
       <p className='mb-3 px-4 text-sm text-muted-foreground'>Everything the club has sent you, newest first.</p>
       <MessageList items={items} empty='No messages yet' />
     </div>
+  )
+}
+
+function NotesSheet({ sailor, onClose }: { sailor: Sailor | null; onClose: () => void }) {
+  const { family } = useFamily()
+  const update = useStore((s) => s.updateSailor)
+  const [text, setText] = useState('')
+  const [pickups, setPickups] = useState<string[]>([])
+  const [newPickup, setNewPickup] = useState('')
+  const [loadedFor, setLoadedFor] = useState<string | null>(null)
+  if (sailor && loadedFor !== sailor.id) {
+    setLoadedFor(sailor.id)
+    setText(sailor.parentNote?.text ?? '')
+    setPickups(sailor.authorizedPickups ?? [])
+    setNewPickup('')
+  }
+  return (
+    <Sheet open={!!sailor} onOpenChange={(o) => { if (!o) { onClose(); setLoadedFor(null) } }}>
+      <SheetContent side='bottom' className='max-h-[90svh] overflow-y-auto rounded-t-2xl'>
+        {sailor && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              const extra = newPickup.trim() ? [...pickups, newPickup.trim()] : pickups
+              update(sailor.id, {
+                parentNote: text.trim() ? { text: text.trim(), updatedAt: new Date().toISOString(), by: family.guardians[0].name } : undefined,
+                authorizedPickups: extra,
+              })
+              toast.success(`${sailor.firstName}’s coaches will see this`)
+              onClose()
+              setLoadedFor(null)
+            }}
+          >
+            <SheetHeader>
+              <SheetTitle>For {sailor.firstName}’s coaches</SheetTitle>
+              <SheetDescription>Coaches see this on their roster. Medical details belong on the medical form.</SheetDescription>
+            </SheetHeader>
+            <div className='grid gap-4 px-4 pb-6'>
+              <div className='grid gap-1.5'>
+                <Label htmlFor='note'>Note</Label>
+                <Textarea id='note' rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder='e.g. Gets nervous in big breeze. A quick check-in before launching helps.' />
+              </div>
+              <div className='grid gap-1.5'>
+                <Label htmlFor='pickup'>Who else can pick {sailor.firstName} up?</Label>
+                <ul className='grid gap-1.5'>
+                  {pickups.map((p) => (
+                    <li key={p} className='flex items-center justify-between rounded-md border px-3 py-2 text-sm'>
+                      {p}
+                      <button type='button' onClick={() => setPickups(pickups.filter((x) => x !== p))} aria-label={`Remove ${p}`}>
+                        <X className='size-4 text-muted-foreground' />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className='flex gap-2'>
+                  <Input id='pickup' value={newPickup} onChange={(e) => setNewPickup(e.target.value)} placeholder='Name (relationship)' />
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='icon'
+                    disabled={!newPickup.trim()}
+                    onClick={() => {
+                      setPickups([...pickups, newPickup.trim()])
+                      setNewPickup('')
+                    }}
+                    aria-label='Add pickup'
+                  >
+                    <Plus className='size-4' />
+                  </Button>
+                </div>
+                <p className='text-xs text-muted-foreground'>Guardians on the account can always pick up.</p>
+              </div>
+              <Button type='submit' size='lg'>
+                Save for coaches
+              </Button>
+            </div>
+          </form>
+        )}
+      </SheetContent>
+    </Sheet>
   )
 }

@@ -29,19 +29,19 @@ export function PhoneShell({
   const path = useLocation({ select: (l) => l.pathname })
   const clubName = useStore((s) => s.settings.clubName)
   return (
-    <div className='min-h-svh bg-background md:flex md:items-center md:justify-center md:gap-16 md:bg-sidebar md:p-6'>
-      <aside className='hidden max-w-xs text-sidebar-foreground lg:block'>
-        <BurgeeMark className='size-10 text-white' />
-        <h2 className='mt-6 text-2xl font-bold text-white'>{aside.title}</h2>
+    <div className='min-h-svh bg-background md:flex md:items-center md:justify-center md:gap-16 md:bg-mist md:p-6'>
+      <aside className='hidden max-w-xs text-muted-foreground lg:block'>
+        <BurgeeMark className='size-10 text-heading' />
+        <h2 className='mt-6 text-2xl font-semibold'>{aside.title}</h2>
         <div className='mt-3 space-y-3 text-sm leading-relaxed'>{aside.body}</div>
-        <div className='mt-8 rounded-lg border border-sidebar-border p-1'>
-          <RoleSwitcher variant='dark' className='w-full' />
+        <div className='mt-8 rounded-lg border bg-card p-1 shadow-[var(--shadow-card)]'>
+          <RoleSwitcher className='w-full' />
         </div>
       </aside>
 
-      <div className='relative flex min-h-svh w-full flex-col bg-background md:h-[min(860px,calc(100svh-3rem))] md:min-h-0 md:max-w-[400px] md:overflow-hidden md:rounded-[2rem] md:border-[6px] md:border-black/70 md:shadow-2xl'>
+      <div className='relative flex min-h-svh w-full flex-col bg-background md:h-[min(860px,calc(100svh-3rem))] md:min-h-0 md:max-w-[400px] md:overflow-hidden md:rounded-[2.25rem] md:border md:border-border md:shadow-[0_40px_80px_-30px_rgb(20_53_90/0.45)] md:ring-[10px] md:ring-card'>
         <header className='sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-2.5 backdrop-blur'>
-          <BurgeeMark className='size-6 text-foreground' />
+          <BurgeeMark className='size-6 text-heading' />
           <span className='min-w-0 flex-1 truncate text-sm font-semibold'>{clubName}</span>
           <div className='lg:hidden'>
             <RoleSwitcher className='py-1' />

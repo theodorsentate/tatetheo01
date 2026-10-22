@@ -15,8 +15,11 @@ import {
   briefing,
   clubOverview,
   familyInfo,
+  attendanceInfo,
+  formRequestsInfo,
   formsInfo,
   moneyInfo,
+  swimChecksInfo,
   resolveAudience,
   rostersInfo,
   sailorsInfo,
@@ -72,6 +75,10 @@ export const ctxNow = (): Ctx => {
       submissions: st.submissions,
       announcements: st.announcements,
       events: st.events,
+      attendance: st.attendance,
+      swimChecks: st.swimChecks,
+      customTemplates: st.customTemplates,
+      formRequests: st.formRequests,
       settings: st.settings,
     },
     now: new Date(),
@@ -97,6 +104,9 @@ const LABELS: Record<string, string> = {
   money: 'Checking balances',
   rosters: 'Checking rosters and coaches',
   forms: 'Checking forms',
+  attendance: 'Checking attendance',
+  swim_checks: 'Checking swim checks',
+  sent_forms: 'Checking sent forms',
   draft_message: 'Drafting a message',
 }
 
@@ -134,7 +144,7 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
     },
     {
       name: 'sailors',
-      description: 'Find junior sailors by name, by the session they are in (program/term/week), by fleet level, or only those with medical alerts or missing forms. Returns age, fleet, family, medical alerts, emergency contact, missing forms and registrations.',
+      description: 'Find junior sailors by name, by the session they are in (program/term/week), by fleet level, or only those with medical alerts or missing forms. Returns age, fleet, family, medical alerts, the parent\'s note for coaches, authorized pickups, swim check, emergency contact, missing forms and registrations.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -181,6 +191,23 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
       description: 'Registered sailors missing season forms (waiver, medical, swim test, photo release), with the guardian and phone. Filter by form and/or session.',
       inputSchema: { type: 'object', properties: { form: { type: 'string', description: '"waiver", "medical", "swim test" or "photo"' }, ...scope } },
       execute: wrap('forms', (i) => formsInfo(ctxNow(), { form: str(i.form), program: str(i.program), term: str(i.term), week: str(i.week) })),
+    },
+    {
+      name: 'attendance',
+      description: 'Live attendance today for sessions in progress (who is on the water, here, absent, went home and with whom, not checked in) plus sailors with poor season attendance. Filter by program/term/week.',
+      inputSchema: { type: 'object', properties: scope },
+      execute: wrap('attendance', (i) => attendanceInfo(ctxNow(), { program: str(i.program), term: str(i.term), week: str(i.week) })),
+    },
+    {
+      name: 'swim_checks',
+      description: 'Registered sailors in water programs who have not passed a swim check yet. Filter by program/term/week.',
+      inputSchema: { type: 'object', properties: scope },
+      execute: wrap('swim_checks', (i) => swimChecksInfo(ctxNow(), { program: str(i.program), term: str(i.term), week: str(i.week) })),
+    },
+    {
+      name: 'sent_forms',
+      description: 'One-off and season forms the director sent to families for signature (e.g. regatta permission slips): due date, how many signed, and who has not signed yet.',
+      execute: wrap('sent_forms', () => formRequestsInfo(ctxNow())),
     },
     {
       name: 'club_overview',

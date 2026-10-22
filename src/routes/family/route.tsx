@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { createFileRoute, Outlet } from '@tanstack/react-router'
 import { ClipboardList, Home, MessageSquare, Sailboat } from 'lucide-react'
-import { FORM_TEMPLATES, PERSONAS } from '@/data/catalog'
+import { PERSONAS } from '@/data/catalog'
 import { familyRegs } from '@/data/hooks'
 import { useStore } from '@/data/store'
-import { outstandingForms } from '@/domain/rules'
+import { useFamilyPending } from '@/features/family/home'
 import { PhoneShell } from '@/components/burgee/phone-shell'
 
 export const Route = createFileRoute('/family')({
@@ -12,17 +12,11 @@ export const Route = createFileRoute('/family')({
     const cart = useStore((s) => s.cart)
     const regs = useStore((s) => s.registrations)
     const sailors = useStore((s) => s.sailors)
-    const submissions = useStore((s) => s.submissions)
-    const season = useStore((s) => s.settings.season)
-    const { todo, forms } = useMemo(() => {
-      const mine = familyRegs(regs, sailors, PERSONAS.familyId)
-      const kids = sailors.filter((s) => s.familyId === PERSONAS.familyId)
-      return {
-        todo: mine.filter((r) => r.status === 'offered' || r.status === 'pending-payment').length,
-        forms: kids.reduce((n, k) => n + outstandingForms(k, FORM_TEMPLATES, submissions, season).filter((t) => t.scope === 'sailor').length, 0) +
-          (outstandingForms(kids[0], FORM_TEMPLATES, submissions, season).some((t) => t.scope === 'family') ? 1 : 0),
-      }
-    }, [regs, sailors, submissions, season])
+    const forms = useFamilyPending().length
+    const todo = useMemo(
+      () => familyRegs(regs, sailors, PERSONAS.familyId).filter((r) => r.status === 'offered' || r.status === 'pending-payment').length,
+      [regs, sailors]
+    )
     return (
       <PhoneShell
         tabs={[
@@ -41,6 +35,7 @@ export const Route = createFileRoute('/family')({
                 automatically, and turns a full week into a waitlist spot with no charge.
               </p>
               <p>When a spot opens, the family gets a text and a held seat, and claims it in two taps.</p>
+              <p>Forms the club sends show up here with a due date. Parents leave notes for coaches and see when their sailor is on the water and who picked them up.</p>
             </>
           ),
         }}

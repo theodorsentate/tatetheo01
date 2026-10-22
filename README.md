@@ -9,8 +9,10 @@ This repo is the **clickable demo**, built on the same structure the real produc
 | View | Who | What it does |
 | --- | --- | --- |
 | **Program director** (`/admin`) | Laptop | Today's to-dos, a summer season board (weeks × programs), programs & capacity, registrations, drag-and-drop roster builder, waitlists, families, staff certifications, messages, forms, pricing and waitlist settings |
-| **Coach** (`/coach`) | Phone | Today's groups, allergies and medical notes up front, tap-to-call guardians, weather call to their group, certification renewals |
-| **Parent** (`/family`) | Phone | Claim waitlist offers, pay balances, register kids by eligibility with automatic sibling/multi-week/early-bird pricing, sign forms |
+| **Coach** (`/coach`) | Phone | Attendance (check in → launch → ashore → signed out to an approved pickup) with a live "on the water" count, swim checks that gate launching, parent notes, allergies, tap-to-call guardians, weather call, certification renewals |
+| **Parent** (`/family`) | Phone | Claim waitlist offers, pay balances, register kids by eligibility with automatic sibling/multi-week/early-bird pricing, sign season forms and one-off forms the club sends (with due dates), notes for coaches and approved pickups, live "on the water" status |
+
+Directors can also **send forms to parents**: pick a season form or build a one-off (a regatta permission slip, say), choose who gets it and a due date, and track who has signed, with a one-click nudge for the rest. Session pages have an **Attendance** tab with the season's record and swim check status per sailor.
 
 Switch views from the welcome page (`/`) or the **Demo view** menu. That menu also resets the demo data.
 

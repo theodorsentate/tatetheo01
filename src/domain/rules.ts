@@ -131,6 +131,7 @@ export function outstandingForms(
   season: string
 ): FormTemplate[] {
   return templates.filter((t) => {
+    if (t.required === false) return false
     const done = submissions.some(
       (s) =>
         s.templateId === t.id &&

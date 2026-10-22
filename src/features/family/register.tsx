@@ -63,7 +63,7 @@ export function FamilyRegister() {
   return (
     <div className='pb-28'>
       <div className='px-4 pt-5'>
-        <h1 className='text-2xl font-bold'>Sign up</h1>
+        <h1 className='text-2xl font-semibold'>Sign up</h1>
         <p className='text-sm text-muted-foreground'>Pick a sailor, then tap the weeks you want. Full weeks join the waitlist at no charge.</p>
       </div>
 
@@ -263,7 +263,7 @@ export function FamilyCheckout() {
         <div className='mx-auto flex size-14 items-center justify-center rounded-full bg-ok-soft text-ok'>
           <Check className='size-7' />
         </div>
-        <h1 className='mt-4 text-2xl font-bold'>You’re all set</h1>
+        <h1 className='mt-4 text-2xl font-semibold'>You’re all set</h1>
         <p className='mx-auto mt-2 max-w-xs text-sm text-muted-foreground'>
           {done.confirmed > 0 && `${done.confirmed} session${done.confirmed > 1 ? 's' : ''} confirmed${done.charged ? ` and ${money(done.charged)} paid` : ''}. `}
           {done.waitlisted > 0 &&
@@ -285,7 +285,7 @@ export function FamilyCheckout() {
       <Link to='/family/register' className='mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground'>
         <ArrowLeft className='size-4' /> Keep browsing
       </Link>
-      <h1 className='text-2xl font-bold'>Review & pay</h1>
+      <h1 className='text-2xl font-semibold'>Review & pay</h1>
       {cart.length === 0 ? (
         <p className='mt-4 text-sm text-muted-foreground'>
           Nothing selected yet.{' '}

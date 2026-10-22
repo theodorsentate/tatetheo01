@@ -27,6 +27,7 @@ import { coachCertRows, groupLoad, outstandingForms } from '@/domain/rules'
 import { Button } from '@/components/ui/button'
 import { Main } from '@/components/layout/main'
 import { AskBar } from '@/assistant/ask-panel'
+import { dayCounts, meetsOn } from '@/domain/attendance'
 import { SeasonBoard } from './season-board'
 
 type Attention = {
@@ -49,6 +50,7 @@ export function AdminDashboard() {
   const settings = useStore((s) => s.settings)
   const events = useStore((s) => s.events)
   const sendFormReminders = useStore((s) => s.sendFormReminders)
+  const attendance = useStore((s) => s.attendance)
   const stats = useSessionStats()
   const look = useLookups()
 
@@ -217,7 +219,7 @@ export function AdminDashboard() {
     <Main>
       <div className='mb-8'>
         <p className='text-sm text-muted-foreground'>{format(now, 'EEEE, MMMM d')}</p>
-        <h1 className='mt-1 text-3xl font-bold'>Today at {settings.shortName} juniors</h1>
+        <h1 className='mt-1 text-3xl font-semibold'>Today at {settings.shortName} juniors</h1>
         <p className='mt-2 max-w-[70ch] text-sm text-muted-foreground'>
           Fall teams are in week {fallWeek} of 11. Summer 2027 registration is open
           {membersOnly
@@ -337,6 +339,19 @@ export function AdminDashboard() {
                         <span className='block truncate text-xs text-muted-foreground'>
                           {s.days} · {coachNames || 'No coaches assigned'}
                         </span>
+                        {(() => {
+                          const ids = regs.filter((r) => r.sessionId === s.id && r.status === 'confirmed').map((r) => r.sailorId)
+                          const todayIso = format(now, 'yyyy-MM-dd')
+                          const c = dayCounts(Object.values(attendance).filter((e) => e.sessionId === s.id && e.date === todayIso), ids)
+                          if (!meetsOn(s, now)) return null
+                          return (
+                            <span className={cn('mt-0.5 block text-xs font-medium', c.onWater ? 'text-signal' : 'text-muted-foreground')}>
+                              {c.notIn === ids.length
+                                ? `Practice today, ${s.time.split('·')[0].replace('Weekdays ', '')}`
+                                : `Today: ${c.present + c.ashore + c.onWater} here, ${c.onWater} on the water, ${c.absent} absent`}
+                            </span>
+                          )
+                        })()}
                       </span>
                       <span className='text-sm font-semibold'>
                         {st.confirmed}

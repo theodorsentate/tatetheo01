@@ -41,7 +41,7 @@ if (!rootElement.innerHTML) {
   ReactDOM.createRoot(rootElement).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
+        <ThemeProvider defaultTheme='light'>
           <RouterProvider router={router} />
         </ThemeProvider>
       </QueryClientProvider>

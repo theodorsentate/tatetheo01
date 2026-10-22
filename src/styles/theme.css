@@ -1,54 +1,68 @@
 /*
  * Burgee tokens.
- * Harbor ink for structure, tide blue for action, burgee red only for the
- * mark and real problems, signal amber for "needs a decision", seaglass for
- * "all good". Fleet colors (see domain/rules LEVELS) are reserved for fleets.
+ * Navy for action and headings, burgee red only for the mark and real
+ * problems, signal amber for "needs a decision", seaglass for "all good",
+ * brass for a little club polish. Fleet colors (domain/rules LEVELS) are
+ * reserved for fleets.
  */
 :root {
-  --radius: 0.5rem;
-  --background: #f4f6f6;
-  --foreground: #10222f;
+  /*
+   * Bright, crisp yacht club: white sailcloth surfaces, navy only where you
+   * act or need to look, slate (not black) text, a thread of brass.
+   */
+  --radius: 0.625rem;
+  --background: #f6f8fb;
+  --foreground: #243142;
+  --heading: #14355a;
   --card: #ffffff;
-  --card-foreground: #10222f;
+  --card-foreground: #243142;
   --popover: #ffffff;
-  --popover-foreground: #10222f;
-  --primary: #17496e;
+  --popover-foreground: #243142;
+  --primary: #1d4f8c;
   --primary-foreground: #ffffff;
-  --secondary: #e7eef2;
-  --secondary-foreground: #10222f;
-  --muted: #eef2f4;
-  --muted-foreground: #586a77;
-  --accent: #e4edf3;
-  --accent-foreground: #10222f;
-  --destructive: #c8342b;
-  --border: #dbe3e8;
-  --input: #ccd7de;
-  --ring: #17496e;
+  --secondary: #edf2f8;
+  --secondary-foreground: #1d3557;
+  --muted: #eff3f7;
+  --muted-foreground: #66768a;
+  --accent: #eaf1fa;
+  --accent-foreground: #1d4f8c;
+  --destructive: #c8372d;
+  --border: #e3e9f0;
+  --input: #d5dde7;
+  --ring: #1d4f8c;
 
-  --signal: #b9820f;
-  --signal-soft: #fbf1d9;
-  --ok: #2f7d6b;
-  --ok-soft: #e1f1ec;
-  --danger-soft: #fae6e4;
-  --burgee: #c8342b;
+  --brass: #b4873c;
+  --signal: #a8730c;
+  --signal-soft: #fdf3dc;
+  --ok: #2b7a66;
+  --ok-soft: #e3f3ed;
+  --danger-soft: #fbe8e6;
+  --burgee: #d23b30;
 
-  --chart-1: #17496e;
-  --chart-2: #2f7d6b;
+  --chart-1: #1d4f8c;
+  --chart-2: #2b7a66;
   --chart-3: #e0a526;
-  --chart-4: #c8342b;
-  --chart-5: #7b93a6;
+  --chart-4: #c8372d;
+  --chart-5: #8aa0b8;
 
-  --sidebar: #0f2433;
-  --sidebar-foreground: #c9d7e0;
-  --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #0f2433;
-  --sidebar-accent: #193649;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #1c3a4e;
-  --sidebar-ring: #7fb3da;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #4a5a6e;
+  --sidebar-primary: #14355a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #edf3fa;
+  --sidebar-accent-foreground: #1d4f8c;
+  --sidebar-border: #e8edf3;
+  --sidebar-ring: #1d4f8c;
+
+  --shadow-card: 0 1px 2px rgb(20 53 90 / 0.04), 0 2px 8px -2px rgb(20 53 90 / 0.06);
+  --mist: #e7eef6;
 }
 
 .dark {
+  --heading: #eaf2f8;
+  --brass: #d4a75a;
+  --shadow-card: none;
+  --mist: #07131b;
   --background: #0a1821;
   --foreground: #e3ecf1;
   --card: #0f212d;
@@ -122,6 +136,9 @@
   --color-ok-soft: var(--ok-soft);
   --color-danger-soft: var(--danger-soft);
   --color-burgee: var(--burgee);
+  --color-brass: var(--brass);
+  --color-mist: var(--mist);
+  --color-heading: var(--heading);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

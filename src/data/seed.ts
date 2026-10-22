@@ -1,17 +1,22 @@
 import { addDays, addMonths, format, subDays } from 'date-fns'
 import { quoteCart } from '@/domain/pricing'
 import { autoGroups, eligibility } from '@/domain/rules'
+import { attendanceKey, practiceDates } from '@/domain/attendance'
 import type {
   ActivityEvent,
   Announcement,
+  AttendanceEntry,
   Coach,
   Family,
+  FormRequest,
   FormSubmission,
+  FormTemplate,
   Group,
   Level,
   Registration,
   Sailor,
   Session,
+  SwimCheck,
 } from '@/domain/types'
 import { seatsLeft } from '@/domain/waitlist'
 import {
@@ -32,7 +37,44 @@ export type DemoState = {
   submissions: FormSubmission[]
   announcements: Announcement[]
   events: ActivityEvent[]
+  attendance: Record<string, AttendanceEntry>
+  swimChecks: SwimCheck[]
+  customTemplates: FormTemplate[]
+  formRequests: FormRequest[]
 }
+
+/** One-off form the director already sent this fall. */
+export const PERMISSION_SLIP: FormTemplate = {
+  id: 'frostbite-slip',
+  name: 'Frostbite Regatta Permission Slip',
+  short: 'Frostbite slip',
+  description: 'Permission to race at the Frostbite Green Fleet regatta on Nov 7, travel by club launch.',
+  scope: 'sailor',
+  requiresSignature: true,
+  required: false,
+  custom: true,
+  body: 'I give permission for my child to sail in the Frostbite Green Fleet regatta on Saturday, November 7, and to ride the club launch to and from the race area with coaches. I understand races may be postponed or cancelled for weather.',
+  fields: [
+    { kind: 'choice', id: 'lunch', label: 'Lunch', options: ['Packing a lunch', 'Ordering the club box lunch ($12)'], required: true },
+    { kind: 'text', id: 'pickup', label: 'Who is picking up after racing?', required: true },
+  ],
+}
+
+const NOTES = [
+  'Gets cold quickly. Please make sure the spray top goes on before launching.',
+  'Working on confidence in big breeze. A quick check-in before launching helps a lot.',
+  'Very competitive, can get frustrated after a bad race. A short reset talk works best.',
+  'Wears contacts, keeps a spare pair in the green dry bag.',
+  'Shy with new groups for the first day or two. Pairing with a friend helps.',
+  'Loves helping rig. Happy to be given a job on the dock.',
+  'Does best with short instructions, one at a time.',
+  'Prefers to be called by middle name, Jamie.',
+  'Leaves early on Thursdays for piano at 5:15.',
+  'First summer away from Opti Green. Nervous about capsize drills.',
+  'Sunburns easily. We send SPF 50 in the bag; please remind at lunch.',
+  'Carpools with the Hadley kids on Tuesdays.',
+]
+const PICKUPS = ['Grandmother', 'Grandfather', 'Nanny', 'Aunt', 'Family friend', 'Older sibling (17)']
 
 /* Deterministic PRNG so every demo load looks the same. */
 function mulberry32(seed: number) {
@@ -614,6 +656,101 @@ export function createSeed(now: Date = new Date()): DemoState {
       }
     })
 
+  /* ───────────── Parent notes & pickups ───────────── */
+  for (const k of sailors) {
+    const fam = familyById.get(k.familyId)!
+    if (k.id === 's-finn') {
+      k.parentNote = { text: 'Finn is working on his starts and loves the competitive drills. He can get frustrated after a bad race; a quick word from a coach helps him reset.', updatedAt: subDays(now, 40).toISOString(), by: 'Sarah Calloway' }
+      continue
+    }
+    if (k.id === 's-hazel') {
+      k.parentNote = { text: 'Hazel is still a little nervous about capsizing and does best with a buddy boat nearby. Her grandmother Lou picks her up on Thursdays.', updatedAt: subDays(now, 12).toISOString(), by: 'Sarah Calloway' }
+      k.authorizedPickups = ['Lou Calloway (grandmother)']
+      continue
+    }
+    if (chance(0.3)) k.parentNote = { text: pick(NOTES), updatedAt: subDays(now, Math.floor(rand() * 60)).toISOString(), by: fam.guardians[0].name }
+    if (chance(0.35)) k.authorizedPickups = [`${pick(PARENT_NAMES)} ${pick([fam.name, pick(SURNAMES)])} (${pick(PICKUPS).toLowerCase()})`]
+  }
+
+  /* ───────────── Swim checks ───────────── */
+  const swimChecks: SwimCheck[] = []
+  for (const sub of submissions.filter((x) => x.templateId === 'swim')) {
+    if (sub.values.result?.startsWith('Passed')) {
+      const atClub = sub.values.result.includes('at the Club')
+      swimChecks.push({
+        sailorId: sub.sailorId!,
+        result: 'passed',
+        date: sub.values.testedOn || iso(subDays(now, 120)),
+        by: atClub ? pick(['Maya Ortiz', 'Liam Becker', 'Ava Thornton']) : 'Certificate on file',
+      })
+    }
+  }
+  // A couple of kids on current teams still need theirs.
+  for (const sid of ['s-hazel']) {
+    const i = swimChecks.findIndex((c) => c.sailorId === sid)
+    if (i >= 0) swimChecks.splice(i, 1)
+  }
+
+  /* ───────────── Attendance history (fall teams, up to yesterday) ───────────── */
+  const attendance: Record<string, AttendanceEntry> = {}
+  const yesterday = subDays(now, 1)
+  for (const session of sessions.filter((s) => s.termId === 'fall-26')) {
+    const roster = registrations.filter((r) => r.sessionId === session.id && r.status === 'confirmed').map((r) => r.sailorId)
+    const coach = groups.find((g) => g.sessionId === session.id && g.coachIds.length)?.coachIds[0]
+    const coachName = coaches.find((c) => c.id === coach)?.name ?? 'Coach'
+    const dates = practiceDates(session, yesterday)
+    for (const sid of roster) {
+      const reliability = 0.78 + rand() * 0.2
+      dates.forEach((date, i) => {
+        const absent = !chance(reliability) || (sid === 's-hazel' && i === dates.length - 2)
+        const fam = familyById.get(sailors.find((x) => x.id === sid)!.familyId)!
+        attendance[attendanceKey(date, session.id, sid)] = {
+          sailorId: sid,
+          sessionId: session.id,
+          date,
+          status: absent ? 'absent' : 'picked-up',
+          updatedAt: new Date(`${date}T18:05:00`).toISOString(),
+          by: coachName,
+          pickedUpBy: absent ? undefined : fam.guardians[Math.floor(rand() * fam.guardians.length)].name,
+          launchedAt: absent ? undefined : new Date(`${date}T16:05:00`).toISOString(),
+        }
+      })
+    }
+  }
+
+  /* ───────────── Forms already pushed to families ───────────── */
+  const green = registrations.filter((r) => r.sessionId === 'green-team-fall-26' && r.status === 'confirmed').map((r) => r.sailorId)
+  const greenFamilies = [...new Set(green.map((sid) => sailors.find((x) => x.id === sid)!.familyId))]
+  const formRequests: FormRequest[] = [
+    {
+      id: 'req-frostbite',
+      templateId: PERMISSION_SLIP.id,
+      familyIds: greenFamilies,
+      sailorIds: green,
+      audienceLabel: 'Opti Green Team families',
+      dueDate: '2026-11-02',
+      message: 'Please sign the permission slip for the Frostbite Green Fleet regatta on Nov 7 so your sailor can race.',
+      channels: ['email', 'sms'],
+      sentAt: subDays(now, 4).toISOString(),
+      sentBy: 'Maya Ortiz',
+    },
+  ]
+  for (const sid of green.filter((x) => x !== 's-hazel')) {
+    if (!chance(0.6)) continue
+    const k = sailors.find((x) => x.id === sid)!
+    const fam = familyById.get(k.familyId)!
+    submissions.push({
+      id: id('fs'),
+      templateId: PERMISSION_SLIP.id,
+      familyId: fam.id,
+      sailorId: sid,
+      season: DEFAULT_SETTINGS.season,
+      signedBy: fam.guardians[0].name,
+      signedAt: subDays(now, Math.floor(rand() * 4)).toISOString(),
+      values: { lunch: pick(['Packing a lunch', 'Ordering the club box lunch ($12)']), pickup: fam.guardians[0].name },
+    })
+  }
+
   return {
     sessions,
     families,
@@ -624,5 +761,9 @@ export function createSeed(now: Date = new Date()): DemoState {
     submissions,
     announcements,
     events,
+    attendance,
+    swimChecks,
+    customTemplates: [PERMISSION_SLIP],
+    formRequests,
   }
 }

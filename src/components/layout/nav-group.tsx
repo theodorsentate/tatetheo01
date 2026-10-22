@@ -60,7 +60,7 @@ export function NavGroup({ title, items }: NavGroupProps) {
 
 function NavBadge({ children }: { children: ReactNode }) {
   return (
-    <Badge className='ms-auto rounded-full bg-white/12 px-1.5 py-0 text-[11px] font-semibold text-sidebar-foreground'>
+    <Badge className='ms-auto rounded-full bg-primary/10 px-1.5 py-0 text-[11px] font-semibold text-primary'>
       {children}
     </Badge>
   )

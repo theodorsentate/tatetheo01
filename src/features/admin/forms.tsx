@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { format } from 'date-fns'
-import { Check, Minus } from 'lucide-react'
+import { Check, Minus, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { FORM_TEMPLATES, PROGRAMS } from '@/data/catalog'
 import { useLookups } from '@/data/hooks'
 import { useStore } from '@/data/store'
+import { requestProgress } from '@/domain/attendance'
 import { ACTIVE_STATUSES } from '@/domain/pricing'
 import type { FormSubmission, FormTemplate } from '@/domain/types'
 import { Button } from '@/components/ui/button'
@@ -13,14 +14,19 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Main } from '@/components/layout/main'
 import { FleetChip, PageHeader } from '@/components/burgee/marks'
+import { SendFormDialog } from './send-form'
 
 export function AdminForms() {
   const regs = useStore((s) => s.registrations)
   const sailors = useStore((s) => s.sailors)
   const submissions = useStore((s) => s.submissions)
   const season = useStore((s) => s.settings.season)
-  const remind = useStore((s) => s.sendFormReminders)
+  const sendAnnouncement = useStore((s) => s.sendAnnouncement)
+  const requests = useStore((s) => s.formRequests)
+  const custom = useStore((s) => s.customTemplates)
+  const sendRequest = useStore((s) => s.sendFormRequest)
   const look = useLookups()
+  const [sending, setSending] = useState(false)
   const [missingOnly, setMissingOnly] = useState(true)
   const [program, setProgram] = useState('all')
   const [viewing, setViewing] = useState<{ sub: FormSubmission; t: FormTemplate } | null>(null)
@@ -56,17 +62,94 @@ export function AdminForms() {
         title='Forms & waivers'
         description={`Every registered sailor needs these signed once for the ${season} season. Parents sign from their phone; coaches see medical details on the roster.`}
         actions={
-          <Button
-            disabled={!famsMissing.length}
-            onClick={() => {
-              remind(famsMissing)
-              toast.success(`Reminder sent to ${famsMissing.length} families by email and text`)
-            }}
-          >
-            Remind {famsMissing.length} families
-          </Button>
+          <>
+            <Button
+              variant='outline'
+              disabled={!famsMissing.length}
+              onClick={() => {
+                const n = sendAnnouncement({
+                  title: `Reminder: ${season} forms`,
+                  body: 'Your sailor is still missing one or more season forms. It takes about a minute from your phone in Burgee, and sailors need them on file before their next session.',
+                  category: 'reminder',
+                  audience: { kind: 'outstanding-forms' },
+                  channels: ['email', 'sms'],
+                  sentBy: 'Jordan Hale',
+                })
+                toast.success(`Reminder sent to ${n} families by email and text`)
+              }}
+            >
+              Remind {famsMissing.length} families
+            </Button>
+            <Button onClick={() => setSending(true)}>
+              <Send className='size-4' /> Send a form
+            </Button>
+          </>
         }
       />
+      <SendFormDialog open={sending} onOpenChange={setSending} />
+
+      {requests.length > 0 && (
+        <section className='mb-8' aria-labelledby='sent-forms'>
+          <h2 id='sent-forms' className='mb-3 text-lg font-semibold'>
+            Sent for signature
+          </h2>
+          <ul className='divide-y rounded-lg border bg-card'>
+            {requests.map((r) => {
+              const t = [...custom, ...FORM_TEMPLATES].find((x) => x.id === r.templateId)
+              if (!t) return null
+              const p = requestProgress(r, t, submissions, season)
+              const pct = p.total ? Math.round((p.done / p.total) * 100) : 0
+              const late = r.dueDate && r.dueDate < format(new Date(), 'yyyy-MM-dd') && p.done < p.total
+              const unsignedSailors = r.sailorIds.filter((sid) => !submissions.some((s) => s.templateId === t.id && s.season === season && s.sailorId === sid))
+              const unsignedFamilies =
+                t.scope === 'family'
+                  ? r.familyIds.filter((fid) => !submissions.some((s) => s.templateId === t.id && s.season === season && s.familyId === fid))
+                  : [...new Set(unsignedSailors.map((sid) => look.sailor.get(sid)!.familyId))]
+              return (
+                <li key={r.id} className='grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_220px_auto] sm:items-center'>
+                  <div className='min-w-0'>
+                    <p className='font-medium'>{t.name}</p>
+                    <p className='text-xs text-muted-foreground'>
+                      {r.audienceLabel}. Sent {format(new Date(r.sentAt), 'MMM d')} by {r.sentBy}
+                      {r.dueDate && (
+                        <span className={late ? 'font-medium text-destructive' : ''}>, due {format(new Date(`${r.dueDate}T12:00:00`), 'MMM d')}</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className='flex items-center gap-2'>
+                    <div className='h-1.5 flex-1 overflow-hidden rounded-full bg-muted'>
+                      <div className='h-full rounded-full bg-ok' style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className='w-16 text-end text-xs font-medium'>
+                      {p.done}/{p.total} signed
+                    </span>
+                  </div>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    disabled={!unsignedFamilies.length}
+                    onClick={() => {
+                      sendRequest({
+                        templateId: t.id,
+                        familyIds: unsignedFamilies,
+                        sailorIds: unsignedSailors,
+                        audienceLabel: `${r.audienceLabel} (not yet signed)`,
+                        dueDate: r.dueDate,
+                        message: r.message,
+                        channels: r.channels,
+                        sentBy: 'Jordan Hale',
+                      })
+                      toast.success(`Nudged ${unsignedFamilies.length} families`)
+                    }}
+                  >
+                    Nudge {unsignedFamilies.length}
+                  </Button>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
       <div className='mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
         {FORM_TEMPLATES.map((t) => {
           const done = rows.filter((r) => r.cells.find((c) => c.t.id === t.id)?.sub).length

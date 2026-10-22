@@ -136,7 +136,7 @@ export function FillBar({
         aria-label={`${taken} of ${capacity} spots filled`}
       >
         <div
-          className={cn('h-full rounded-full', pct >= 100 ? 'bg-foreground' : 'bg-primary')}
+          className={cn('h-full rounded-full', pct >= 100 ? 'bg-heading' : 'bg-primary/70')}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -205,7 +205,7 @@ export function PageHeader({
   return (
     <div className={cn('mb-6 flex flex-wrap items-end justify-between gap-4', className)}>
       <div className='min-w-0'>
-        <h1 className='text-2xl font-bold'>{title}</h1>
+        <h1 className='text-2xl font-semibold'>{title}</h1>
         {description && (
           <p className='mt-1 max-w-[65ch] text-sm text-muted-foreground'>{description}</p>
         )}

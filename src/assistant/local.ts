@@ -11,8 +11,10 @@ import { money } from '@/domain/pricing'
 import {
   type AssistantAction,
   type Ctx,
+  attendanceInfo,
   familyInfo,
   findSessions,
+  formRequestsInfo,
   formsInfo,
   matchCert,
   matchPrograms,
@@ -23,6 +25,7 @@ import {
   sailorsInfo,
   sessionsInfo,
   staffCertifications,
+  swimChecksInfo,
   waitlistInfo,
 } from './query'
 
@@ -86,6 +89,67 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
   }
 
   const famMentioned = ctx.s.families.find((f) => new RegExp(`\\b${f.name.toLowerCase()}s?\\b`).test(q))
+
+  /* One-off forms sent to families (permission slips) */
+  if (/permission|slip|frostbite|sent (a |the )?form|forms? (we|i) sent/.test(q)) {
+    const reqs = formRequestsInfo(ctx)
+    actions.push({ kind: 'link', label: 'Open forms & waivers', href: '/admin/forms' })
+    if (!reqs.length) return { text: 'No forms have been sent out for signature yet.', actions }
+    return {
+      text: reqs
+        .map((r) => `**${r.form}**: ${r.signed} of ${r.of} signed${r.due ? `, due ${r.due}` : ''}.${r.notSignedYet.length ? `\n\nStill waiting on:\n${list(r.notSignedYet, 15)}` : ''}`)
+        .join('\n\n'),
+      actions,
+    }
+  }
+
+  /* Swim checks */
+  if (/swim\s*(check|test)|passed (the |a )?swim|can.?t swim/.test(q) && !/\bforms?\b|sign/.test(q)) {
+    // "swim check" isn't the Swim Clinic: drop the phrase before reading the scope.
+    const sc = scopeOf(q.replace(/swim\s*(check|test)s?|passed (the |a )?swim|can.?t swim/g, ''))
+    const res = swimChecksInfo(ctx, sc)
+    if (!res.needSwimCheck) return { text: `Everyone registered${sc.program || sc.week ? ' there' : ''} has passed a swim check.`, actions }
+    return {
+      text: `**${res.needSwimCheck} of ${res.sailorsChecked} sailors**${sc.program || sc.week ? ' in that group' : ''} still need a swim check. Coaches can record it from the roster on their phone.\n\n${list(res.rows.map((r) => `[${r.sailor}](${r.familyHref}): ${r.status}`), 15)}`,
+      actions,
+    }
+  }
+
+  /* Attendance */
+  if (/on the water|attendance|absent|missed|missing practice|checked in|who.?s here|picked up|went home|sign(ed)? out|ashore/.test(q)) {
+    const sc = scopeOf(q)
+    const res = attendanceInfo(ctx, sc)
+    if (!res.sessions.length) return { text: 'No sessions are running right now.', actions }
+    const concerns = /missed|attendance|absent a lot|skipping/.test(q) && !/today/.test(q)
+    const text = res.sessions
+      .filter((s) => (concerns ? s.attendanceConcerns.length : true))
+      .map((s) => {
+        if (concerns) return `**[${s.session}](${s.href})**:\n${list(s.attendanceConcerns)}`
+        const t = s.today
+        const parts = [
+          t.onTheWater.length ? `**${t.onTheWater.length} on the water**: ${t.onTheWater.join(', ')}` : '',
+          t.here.length ? `${t.here.length} here on land: ${t.here.join(', ')}` : '',
+          t.absent.length ? `Absent: ${t.absent.join(', ')}` : '',
+          t.wentHome.length ? `Went home: ${t.wentHome.join('; ')}` : '',
+          t.notCheckedIn ? `${t.notCheckedIn} not checked in yet` : '',
+        ].filter(Boolean)
+        return `**[${s.session}](${s.href})**${s.practiceToday ? '' : ' (no practice today)'}:\n${list(parts.length ? parts : ['Nobody checked in yet'])}`
+      })
+      .join('\n\n')
+    return { text: text || 'Nobody has a worrying attendance record right now.', actions }
+  }
+
+  /* Parent notes */
+  if (/\bnotes?\b|parents? (said|wrote|told)|anything (i|coaches) should know/.test(q) && !/\bforms?\b/.test(q)) {
+    const sc = scopeOf(q)
+    const res = sailorsInfo(ctx, { ...sc, limit: 200 })
+    const withNotes = res.rows.filter((r) => r.parentNote)
+    if (!withNotes.length) return { text: 'No parent notes for that group.', actions }
+    return {
+      text: `**${withNotes.length} sailors** have notes from parents:\n\n${list(withNotes.map((r) => `[${r.name}](${r.familyHref}): ${r.parentNote}`), 15)}`,
+      actions,
+    }
+  }
 
   /* Money */
   if (/\b(owe|owes|owing|balance|unpaid|outstanding payment|paid|payment|collected|revenue|tuition|money)\b/.test(q)) {
@@ -234,7 +298,7 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
   if (kid) {
     const r = sailorsInfo(ctx, { name: `${kid.firstName} ${kid.lastName}` }).rows[0]
     return {
-      text: `**${r.name}**, ${r.age}, ${r.fleet} ([${r.family} family](${r.familyHref})).${r.medicalAlerts.length ? ` Medical: ${r.medicalAlerts.join('; ')}.` : ''}${r.formsMissing.length ? ` Missing ${r.formsMissing.join(', ').toLowerCase()}.` : ''}\n\n${list(r.registrations)}`,
+      text: `**${r.name}**, ${r.age}, ${r.fleet} ([${r.family} family](${r.familyHref})).${r.medicalAlerts.length ? ` Medical: ${r.medicalAlerts.join('; ')}.` : ''}${r.parentNote ? ` Parent note: “${r.parentNote}”` : ''} Swim check: ${r.swimCheck}.${r.formsMissing.length ? ` Missing ${r.formsMissing.join(', ').toLowerCase()}.` : ''}\n\n${list(r.registrations)}`,
       actions,
     }
   }
@@ -248,9 +312,9 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
 
 export const SUGGESTIONS = [
   'Who still needs their SafeSport?',
-  'Which summer weeks are full?',
   "Who's on the Green Camp week 3 waitlist?",
+  'Who hasn’t signed the Frostbite permission slip?',
+  'Who still needs a swim check?',
   'Which families owe money?',
-  'Any allergies on the Green Team?',
   'Remind families who are missing forms',
 ]

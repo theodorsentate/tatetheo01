@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { Check, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import { FORM_TEMPLATES } from '@/data/catalog'
+import { useLookups } from '@/data/hooks'
 import { useStore } from '@/data/store'
 import type { FormTemplate, Sailor } from '@/domain/types'
 import { Button } from '@/components/ui/button'
@@ -12,42 +12,47 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
-import { useFamily } from './home'
+import { useAllTemplates, useFamily, useFamilyPending } from './home'
 
 export function FamilyForms() {
-  const { family, kids } = useFamily()
+  const { family } = useFamily()
   const submissions = useStore((s) => s.submissions)
   const season = useStore((s) => s.settings.season)
+  const templates = useAllTemplates()
+  const pending = useFamilyPending()
   const [signing, setSigning] = useState<{ t: FormTemplate; sailor?: Sailor } | null>(null)
+  const look = useLookups()
 
   const find = (t: FormTemplate, sailor?: Sailor) =>
     submissions.find(
       (s) => s.templateId === t.id && s.season === season && s.familyId === family.id && (t.scope === 'family' || s.sailorId === sailor?.id)
     )
 
-  const rows = [
-    ...kids.flatMap((k) => FORM_TEMPLATES.filter((t) => t.scope === 'sailor').map((t) => ({ t, sailor: k as Sailor | undefined }))),
-    ...FORM_TEMPLATES.filter((t) => t.scope === 'family').map((t) => ({ t, sailor: undefined as Sailor | undefined })),
-  ]
-  const todo = rows.filter((r) => !find(r.t, r.sailor))
-  const doneRows = rows.filter((r) => find(r.t, r.sailor))
+  const todo = pending.map((p) => ({ t: p.template, sailor: p.sailor, dueDate: p.dueDate }))
+  const doneRows = submissions
+    .filter((s) => s.familyId === family.id && s.season === season)
+    .map((s) => ({ t: templates.find((t) => t.id === s.templateId)!, sailor: s.sailorId ? look.sailor.get(s.sailorId) : undefined }))
+    .filter((r) => r.t)
 
   return (
     <div className='px-4 py-5'>
-      <h1 className='text-2xl font-bold'>Forms</h1>
+      <h1 className='text-2xl font-semibold'>Forms</h1>
       <p className='text-sm text-muted-foreground'>
-        Signed once for the {season} season. About a minute each.
+        Season forms are signed once for {season}. The club may also send one-off forms, like regatta permission slips.
       </p>
       {todo.length > 0 && (
         <section className='mt-5'>
           <h2 className='mb-2 text-sm font-semibold text-muted-foreground'>To sign</h2>
           <ul className='space-y-2'>
-            {todo.map(({ t, sailor }) => (
+            {todo.map(({ t, sailor, dueDate }) => (
               <li key={t.id + (sailor?.id ?? '')}>
                 <button onClick={() => setSigning({ t, sailor })} className='flex w-full items-center gap-3 rounded-lg border border-signal/40 bg-card p-4 text-start'>
                   <span className='min-w-0 flex-1'>
                     <span className='block font-medium'>{t.name}</span>
-                    <span className='block text-sm text-muted-foreground'>{sailor ? `For ${sailor.firstName}` : 'For the whole family'}</span>
+                    <span className='block text-sm text-muted-foreground'>
+                      {sailor ? `For ${sailor.firstName}` : 'For the whole family'}
+                      {dueDate && <span className='font-medium text-signal'>, due {format(new Date(`${dueDate}T12:00:00`), 'MMM d')}</span>}
+                    </span>
                   </span>
                   <ChevronRight className='size-4 text-muted-foreground' />
                 </button>

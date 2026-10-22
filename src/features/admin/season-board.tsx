@@ -68,7 +68,7 @@ export function SeasonBoard({
                       params={{ sessionId: session.id }}
                       className={cn(
                         'relative block h-14 overflow-hidden rounded-md border px-2 py-1.5 transition-colors hover:border-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                        full ? 'border-foreground/70 bg-card' : 'bg-card'
+                        full ? 'border-primary/40 bg-card' : 'bg-card'
                       )}
                       aria-label={`${p.name} ${w}: ${st.taken} of ${session.capacity} filled${st.waitlist ? `, ${st.waitlist} waitlisted` : ''}`}
                     >

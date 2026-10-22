@@ -57,6 +57,8 @@ export function audienceLabel(a: Audience, look: ReturnType<typeof useLookups>):
       return 'Families with forms due'
     case 'waitlisted':
       return 'Families on a waitlist'
+    case 'families':
+      return a.label
   }
 }
 
