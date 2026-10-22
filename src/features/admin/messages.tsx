@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { format, formatDistanceToNowStrict } from 'date-fns'
 import { CloudLightning, Mail, MessageSquare, Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from '@/components/ui/textarea'
 import { Main } from '@/components/layout/main'
 import { PageHeader } from '@/components/burgee/marks'
+import { useAsk } from '@/assistant/ask-store'
 
 const TEMPLATES: { id: Announcement['category']; label: string; title: string; body: string }[] = [
   {
@@ -64,11 +65,16 @@ const encode = (a: Audience) => JSON.stringify(a)
 export function AdminMessages({ sessionId }: { sessionId?: string }) {
   const state = useStore()
   const look = useLookups()
-  const [audience, setAudience] = useState<Audience>(sessionId ? { kind: 'session', sessionId } : { kind: 'everyone' })
-  const [channels, setChannels] = useState<Channel[]>(['email', 'sms'])
-  const [category, setCategory] = useState<Announcement['category']>('general')
-  const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
+  // A draft written by Ask Burgee arrives pre-filled, for review before sending.
+  const [draft] = useState(() => useAsk.getState().draft)
+  useEffect(() => {
+    if (draft) useAsk.getState().set({ draft: undefined })
+  }, [draft])
+  const [audience, setAudience] = useState<Audience>(draft?.audience ?? (sessionId ? { kind: 'session', sessionId } : { kind: 'everyone' }))
+  const [channels, setChannels] = useState<Channel[]>(draft?.channels ?? ['email', 'sms'])
+  const [category, setCategory] = useState<Announcement['category']>(draft?.category ?? 'general')
+  const [title, setTitle] = useState(draft?.title ?? '')
+  const [body, setBody] = useState(draft?.body ?? '')
 
   const recipients = useMemo(
     () => (audience.kind === 'staff' ? state.coaches.length : audienceFamilyIds(audience, state, state.settings.season).length),
@@ -105,6 +111,11 @@ export function AdminMessages({ sessionId }: { sessionId?: string }) {
         title='Messages'
         description='Send email and texts to the families in a program, a single week, or everyone at once. Texts go only to guardians who opted in.'
       />
+      {draft && (
+        <p className='mb-4 rounded-lg border border-signal/40 bg-signal-soft px-4 py-2.5 text-sm'>
+          Ask Burgee drafted this message. Check the audience and wording, then send it yourself.
+        </p>
+      )}
       <div className='grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]'>
         <section className='rounded-lg border bg-card p-5' aria-labelledby='compose'>
           <h2 id='compose' className='sr-only'>

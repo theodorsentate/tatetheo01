@@ -1,6 +1,7 @@
 import React from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { CalendarRange, Laptop, Moon, Sun, User, Users } from 'lucide-react'
+import { CalendarRange, Laptop, MessageSquareText, Moon, Sun, User, Users } from 'lucide-react'
+import { useAsk } from '@/assistant/ask-store'
 import { programById } from '@/data/hooks'
 import { useStore } from '@/data/store'
 import { useSearch } from '@/context/search-provider'
@@ -21,6 +22,8 @@ export function CommandMenu() {
   const navigate = useNavigate()
   const { setTheme } = useTheme()
   const { open, setOpen } = useSearch()
+  const [query, setQuery] = React.useState('')
+  const ask = useAsk((s) => s.ask)
   const sailors = useStore((s) => s.sailors)
   const families = useStore((s) => s.families)
   const sessions = useStore((s) => s.sessions)
@@ -40,8 +43,25 @@ export function CommandMenu() {
 
   return (
     <CommandDialog modal open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder='Search sailors, families, sessions…' />
+      <CommandInput placeholder='Search, or ask a question…' value={query} onValueChange={setQuery} />
       <CommandList className='max-h-96'>
+        {query.trim().split(/\s+/).length >= 2 && (
+          <CommandGroup heading='Ask Burgee' forceMount>
+            <CommandItem
+              forceMount
+              value={`ask ${query}`}
+              onSelect={() =>
+                run(() => {
+                  ask(query.trim())
+                  setQuery('')
+                })
+              }
+            >
+              <MessageSquareText />
+              <span className='truncate'>“{query.trim()}”</span>
+            </CommandItem>
+          </CommandGroup>
+        )}
         <CommandEmpty>Nothing matches that. Try a last name or a week number.</CommandEmpty>
         <CommandGroup heading='Go to'>
           {adminNav({ waitlist: 0, certIssues: 0, outstandingForms: 0 })

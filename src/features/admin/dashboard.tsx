@@ -26,6 +26,7 @@ import { ACTIVE_STATUSES, money } from '@/domain/pricing'
 import { coachCertRows, groupLoad, outstandingForms } from '@/domain/rules'
 import { Button } from '@/components/ui/button'
 import { Main } from '@/components/layout/main'
+import { AskBar } from '@/assistant/ask-panel'
 import { SeasonBoard } from './season-board'
 
 type Attention = {
@@ -223,6 +224,9 @@ export function AdminDashboard() {
             ? ` to members only until ${format(new Date(`${summer.memberPriorityUntil}T12:00:00`), 'MMMM d')}.`
             : ' to everyone.'}
         </p>
+        <div className='mt-5 max-w-2xl'>
+          <AskBar />
+        </div>
       </div>
 
       <div className='grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]'>

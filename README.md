@@ -14,6 +14,16 @@ This repo is the **clickable demo**, built on the same structure the real produc
 
 Switch views from the welcome page (`/`) or the **Demo view** menu. That menu also resets the demo data.
 
+## Ask Burgee
+
+The director can ask off-the-cuff questions from any page: the **Ask Burgee** button, the ask bar on Today, or ⌘K. Examples: "who still needs their SafeSport?", "who's on the Green Camp week 3 waitlist?", "what does the Barrow family owe?", "remind families who are missing forms".
+
+- `src/assistant/query.ts` holds the data tools: certifications, sessions, waitlists, sailors, families, money, rosters, forms, plus `draft_message`. Every number in an answer comes from these.
+- `src/assistant/claude.ts`: Claude calls those tools to answer. In the hosted demo it runs on the viewer's own Claude account through the artifact runtime.
+- `src/assistant/local.ts`: an offline engine that recognizes common questions and answers instantly from the same tools. It's used when Claude isn't available, so the feature always works in a pitch.
+- The assistant never changes data. When asked to remind people, it drafts a message that opens pre-filled on the Messages page for the director to review and send.
+- **For the MVP:** move `askClaude` into a server function (a Supabase Edge Function) that calls the Anthropic Messages API with the same instructions and tool definitions, running the query functions against the club's Postgres data.
+
 ## Run it
 
 ```bash
