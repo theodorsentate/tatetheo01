@@ -66,7 +66,7 @@ export function AdminStaff() {
   return (
     <Main>
       <PageHeader
-        title='Staff & certifications'
+        title='Certifications'
         description={`Burgee flags anything expiring within ${warn} days. Coaches with an expired or missing required certification show a warning on every roster they are on.`}
       />
       <div className='mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm'>

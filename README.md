@@ -8,11 +8,32 @@ This repo is the **clickable demo**, built on the same structure the real produc
 
 | View | Who | What it does |
 | --- | --- | --- |
-| **Program director** (`/admin`) | Laptop | Today's to-dos, a summer season board (weeks × programs), programs & capacity, registrations, drag-and-drop roster builder, waitlists, families, staff certifications, messages, forms, pricing and waitlist settings |
+| **Program director** (`/admin`) | Laptop | Today's to-dos, calendar, programs & capacity, registrations, drag-and-drop roster builder, waitlists, attendance, families, sailors, staff directory, certifications, messages, forms, documents, incident reports, boats & equipment, payments, reports, settings |
 | **Coach** (`/coach`) | Phone | Attendance (check in → launch → ashore → signed out to an approved pickup) with a live "on the water" count, swim checks that gate launching, parent notes, allergies, tap-to-call guardians, weather call, certification renewals |
 | **Parent** (`/family`) | Phone | Claim waitlist offers, pay balances, register kids by eligibility with automatic sibling/multi-week/early-bird pricing, sign season forms and one-off forms the club sends (with due dates), notes for coaches and approved pickups, live "on the water" status |
 
 Directors can also **send forms to parents**: pick a season form or build a one-off (a regatta permission slip, say), choose who gets it and a due date, and track who has signed, with a one-click nudge for the rest. Session pages have an **Attendance** tab with the season's record and swim check status per sailor.
+
+### Director pages
+
+The sidebar is grouped the way a program director's week runs:
+
+| Group | Page | What it's for |
+| --- | --- | --- |
+| Season | Today | Everything that needs the director, plus the Ask Burgee bar and summer numbers |
+| | Calendar | Month view of practices and camp weeks (from the programs) plus regattas, deadlines, meetings, socials and trainings the director adds |
+| | Programs & sessions, Registrations | Capacity, pricing, rosters, waitlists and offers |
+| | Attendance | Today's teams on the water and each sailor's season record |
+| People | Families, Sailors | Guardians, balances, forms, swim checks, allergies and parent notes; filter sailors by fleet or by what's missing |
+| | Staff directory | Add, edit and remove staff with phone, email, emergency contact, school and start season. Removing someone takes them off every roster but keeps their files; they can be restored |
+| | Certifications | Required certs per role with expiry warnings |
+| Communication | Messages, Forms & waivers | Email/SMS announcements; season forms and one-off forms pushed to parents |
+| | Documents | Every staff certificate (SafeSport, US Sailing Level 1 and 2, powerboat, first aid, background check…) with the file behind it, filterable by cert or "missing only", plus club documents (safety plan, insurance, handbook) |
+| | Incident reports | Injuries, capsizes, equipment and behavior reports, filed by coaches from their phones and reviewed by the director |
+| Club | Boats & equipment | The junior fleet and coach boats, repair status and last inspection |
+| | Payments | Money by term, balances due, recording checks and cash |
+| | Reports | CSV downloads: session roster, emergency contacts, medical alerts, attendance, staff certifications, staff directory, registrations |
+| | Settings | Pricing, waitlist holds, cert warnings |
 
 Switch views from the welcome page (`/`) or the **Demo view** menu. That menu also resets the demo data.
 
@@ -20,7 +41,7 @@ Switch views from the welcome page (`/`) or the **Demo view** menu. That menu al
 
 The director can ask off-the-cuff questions from any page: the **Ask Burgee** button, the ask bar on Today, or ⌘K. Examples: "who still needs their SafeSport?", "who's on the Green Camp week 3 waitlist?", "what does the Barrow family owe?", "remind families who are missing forms".
 
-- `src/assistant/query.ts` holds the data tools: certifications, sessions, waitlists, sailors, families, money, rosters, forms, plus `draft_message`. Every number in an answer comes from these.
+- `src/assistant/query.ts` holds the data tools: certifications, sessions, waitlists, sailors, families, money, rosters, forms, attendance, swim checks, staff directory, documents, calendar, boats and incident reports, plus `draft_message`. Every number in an answer comes from these.
 - `src/assistant/claude.ts`: Claude calls those tools to answer. In the hosted demo it runs on the viewer's own Claude account through the artifact runtime.
 - `src/assistant/local.ts`: an offline engine that recognizes common questions and answers instantly from the same tools. It's used when Claude isn't available, so the feature always works in a pitch.
 - The assistant never changes data. When asked to remind people, it drafts a message that opens pre-filled on the Messages page for the director to review and send.
@@ -55,18 +76,20 @@ src/
   components/  burgee/ (pennants, badges, phone shell), layout/, ui/ (shadcn)
   routes/      TanStack Router file routes
 supabase/
-  migrations/0001_init.sql   Postgres schema + row-level security for the real MVP
+  migrations/0001_init.sql       Postgres schema + row-level security for the real MVP
+  migrations/0002_club_ops.sql   Staff directory, documents, calendar, attendance, incidents, boats, payments
 ```
 
 ## Demo → MVP
 
 The UI only talks to `src/data/store.ts`. To go live:
 
-1. **Supabase** (database + logins): create a project, run `supabase/migrations/0001_init.sql`, and enable email magic-link auth. Replace each store action with a Supabase call (or an Edge Function where it must be atomic, e.g. registering and assigning seats). The domain functions in `src/domain` run unchanged on the server.
+1. **Supabase** (database + logins): create a project, run the files in `supabase/migrations/` in order, and enable email magic-link auth. Replace each store action with a Supabase call (or an Edge Function where it must be atomic, e.g. registering and assigning seats). The domain functions in `src/domain` run unchanged on the server.
 2. **Waitlist engine**: a scheduled Edge Function calls `expiredOffers` + `offersToIssue` every few minutes. In the demo this runs in the browser every 60 seconds.
 3. **Payments**: swap `DemoCardForm` (`src/features/family/payment.tsx`) for Stripe Checkout or Payment Element. Clubs connect their own Stripe account via Stripe Connect.
 4. **Email & texts**: Resend (email) and Twilio (SMS) behind a `send-announcement` function.
-5. **Hosting**: Vercel. `npm run build` outputs a static SPA. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+5. **Files**: certificate photos and club documents go to a private Supabase Storage bucket (`documents`), with the `documents` table holding the metadata. The demo keeps small uploads in the browser and shows a sample preview for seeded files.
+6. **Hosting**: Vercel. `npm run build` outputs a static SPA. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 
 ## Built on
 

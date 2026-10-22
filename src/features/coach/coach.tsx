@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { readFile } from '@/lib/files'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -74,7 +75,7 @@ export function CoachHome() {
         {format(now, 'EEEE, MMMM d')}
       </p>
       <h1 className='mt-0.5 text-2xl font-semibold'>
-        Morning, {coach.name.split(' ')[0]}
+        {now.getHours() < 12 ? 'Morning' : now.getHours() < 17 ? 'Afternoon' : 'Evening'}, {coach.name.split(' ')[0]}
       </h1>
 
       {certIssue.length > 0 && (
@@ -258,7 +259,7 @@ export function CoachCerts() {
   const rows = coachCertRows(coach, CERT_TYPES, now, warn)
   const [uploading, setUploading] = useState<string | null>(null)
   const [issued, setIssued] = useState(format(now, 'yyyy-MM-dd'))
-  const [fileName, setFileName] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const summary = coachCertSummary(rows)
 
   return (
@@ -297,7 +298,7 @@ export function CoachCerts() {
                 variant='outline'
                 className='mt-3 w-full'
                 onClick={() => {
-                  setFileName('')
+                  setFile(null)
                   setIssued(format(now, 'yyyy-MM-dd'))
                   setUploading(r.certType.id)
                 }}
@@ -325,7 +326,7 @@ export function CoachCerts() {
                 id='file'
                 type='file'
                 accept='image/*,application/pdf'
-                onChange={(e) => setFileName(e.target.files?.[0]?.name ?? '')}
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
             </div>
             <div className='grid gap-1.5'>
@@ -338,11 +339,12 @@ export function CoachCerts() {
               />
             </div>
             <Button
-              onClick={() => {
-                renew(coach.id, uploading!, issued)
+              onClick={async () => {
+                const info = file ? await readFile(file) : undefined
+                renew(coach.id, uploading!, issued, info ? { ...info, uploadedBy: coach.name } : undefined)
                 toast.success(
-                  fileName
-                    ? `${fileName} uploaded. Certification updated.`
+                  file
+                    ? `${file.name} uploaded. Certification updated.`
                     : 'Certification updated'
                 )
                 setUploading(null)

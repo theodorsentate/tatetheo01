@@ -14,6 +14,7 @@ import {
   Phone,
   Sailboat,
   StickyNote,
+  TriangleAlert,
   Undo2,
   Waves,
 } from 'lucide-react'
@@ -39,6 +40,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState, FleetChip } from '@/components/burgee/marks'
+import { IncidentDialog } from '@/features/admin/incidents'
 
 const PILL: Record<AttendanceStatus, string> = {
   present: 'bg-secondary text-foreground',
@@ -66,6 +68,7 @@ export function CoachGroup({ groupId }: { groupId: string }) {
   const [compose, setCompose] = useState<null | 'message' | 'weather'>(null)
   const [signingOut, setSigningOut] = useState<Sailor | null>(null)
   const [swimFor, setSwimFor] = useState<{ sailor: Sailor; thenLaunch: boolean } | null>(null)
+  const [reporting, setReporting] = useState(false)
 
   const group = groups.find((g) => g.id === groupId)
   const session = group ? look.session.get(group.sessionId) : undefined
@@ -161,6 +164,9 @@ export function CoachGroup({ groupId }: { groupId: string }) {
             </Button>
             <Button variant='outline' onClick={() => setCompose('weather')}>
               <CloudLightning className='size-4' /> Weather call
+            </Button>
+            <Button variant='ghost' className='col-span-2 text-muted-foreground' onClick={() => setReporting(true)}>
+              <TriangleAlert className='size-4' /> Report an incident
             </Button>
           </div>
         </section>
@@ -269,6 +275,13 @@ export function CoachGroup({ groupId }: { groupId: string }) {
           } else toast.success(result === 'passed' ? `${s.firstName} passed the swim check` : `${s.firstName} stays ashore until a retest`)
           setSwimFor(null)
         }}
+      />
+      <IncidentDialog
+        open={reporting}
+        onClose={() => setReporting(false)}
+        reporter={coachName}
+        sessionId={session.id}
+        sailorOptions={kids.map((k) => ({ id: k.id, name: `${k.firstName} ${k.lastName}` }))}
       />
       <GroupMessageSheet mode={compose} groupId={group.id} familyCount={new Set(kids.map((k) => k.familyId)).size} onClose={() => setCompose(null)} />
     </div>

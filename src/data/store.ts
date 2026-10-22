@@ -18,6 +18,11 @@ import type {
   FormRequest,
   FormTemplate,
   SwimCheck,
+  Boat,
+  ClubDocument,
+  ClubEvent,
+  Coach,
+  Incident,
 } from '@/domain/types'
 import { expiredOffers, offersToIssue, seatsLeft } from '@/domain/waitlist'
 import { CERT_TYPES, DEFAULT_SETTINGS, FORM_TEMPLATES, PROGRAMS, TERMS } from './catalog'
@@ -76,8 +81,33 @@ type Actions = {
   sendFormRequest: (r: Omit<FormRequest, 'id' | 'sentAt'>) => void
   createTemplate: (t: Omit<FormTemplate, 'id'>) => FormTemplate
 
+  // Staff directory
+  addCoach: (c: Omit<Coach, 'id' | 'certs' | 'avatarHue'>) => Coach
+  updateCoach: (id: string, patch: Partial<Coach>) => void
+  removeCoach: (id: string) => { groups: string[] }
+  restoreCoach: (id: string) => void
+
+  // Documents
+  addDocument: (d: Omit<ClubDocument, 'id' | 'uploadedAt'>) => void
+  removeDocument: (id: string) => void
+
+  // Calendar, safety, equipment, money
+  addCalendarEvent: (e: Omit<ClubEvent, 'id'>) => void
+  removeCalendarEvent: (id: string) => void
+  logIncident: (i: Omit<Incident, 'id'>) => void
+  updateIncident: (id: string, patch: Partial<Incident>) => void
+  addBoat: (b: Omit<Boat, 'id'>) => void
+  updateBoat: (id: string, patch: Partial<Boat>) => void
+  removeBoat: (id: string) => void
+  recordPayment: (p: { familyId: string; registrationIds: string[]; method: 'check' | 'cash'; memo: string }) => void
+
   // Coach-side
-  renewCert: (coachId: string, certTypeId: string, issued: string) => void
+  renewCert: (
+    coachId: string,
+    certTypeId: string,
+    issued: string,
+    file?: { fileName: string; mime: string; sizeBytes: number; dataUrl?: string; uploadedBy: string }
+  ) => void
   markAttendance: (
     date: string,
     sessionId: string,
@@ -554,23 +584,82 @@ export const useStore = create<State & Actions>()(
           }
         }),
 
-      renewCert: (coachId, certTypeId, issued) =>
+      renewCert: (coachId, certTypeId, issued, file) =>
         set((s) => {
           const ct = CERT_TYPES.find((c) => c.id === certTypeId)!
           const expires = format(addMonths(new Date(`${issued}T12:00:00`), ct.validMonths), 'yyyy-MM-dd')
+          const doc: ClubDocument[] = file
+            ? [{ id: uid('doc'), title: ct.name, kind: 'certification', coachId, certTypeId, expires, uploadedAt: new Date().toISOString(), ...file }]
+            : []
           return {
             coaches: s.coaches.map((c) =>
               c.id === coachId
                 ? { ...c, certs: [...c.certs.filter((x) => x.certTypeId !== certTypeId), { certTypeId, issued, expires }] }
                 : c
             ),
+            documents: [...doc, ...s.documents],
+          }
+        }),
+
+      addCoach: (c) => {
+        const coach: Coach = { ...c, id: uid('c'), certs: [], avatarHue: Math.floor(Math.random() * 360), active: true }
+        set((s) => ({ coaches: [...s.coaches, coach], events: [event('registered', `${coach.name} was added to staff`), ...s.events] }))
+        return coach
+      },
+      updateCoach: (id, patch) => set((s) => ({ coaches: s.coaches.map((c) => (c.id === id ? { ...c, ...patch } : c)) })),
+      removeCoach: (id) => {
+        const s0 = get()
+        const coach = s0.coaches.find((c) => c.id === id)
+        const affected = s0.groups.filter((g) => g.coachIds.includes(id)).map((g) => g.name)
+        if (!coach) return { groups: [] }
+        set((s) => ({
+          coaches: s.coaches.filter((c) => c.id !== id),
+          formerCoaches: [{ ...coach, active: false }, ...s.formerCoaches],
+          groups: s.groups.map((g) => (g.coachIds.includes(id) ? { ...g, coachIds: g.coachIds.filter((x) => x !== id) } : g)),
+          events: [event('cancelled', `${coach.name} was removed from staff${affected.length ? ` and taken off ${affected.length} group${affected.length > 1 ? 's' : ''}` : ''}`), ...s.events],
+        }))
+        return { groups: affected }
+      },
+      restoreCoach: (id) =>
+        set((s) => {
+          const coach = s.formerCoaches.find((c) => c.id === id)
+          if (!coach) return {}
+          return { formerCoaches: s.formerCoaches.filter((c) => c.id !== id), coaches: [...s.coaches, { ...coach, active: true }] }
+        }),
+
+      addDocument: (d) => set((s) => ({ documents: [{ ...d, id: uid('doc'), uploadedAt: new Date().toISOString() }, ...s.documents] })),
+      removeDocument: (id) => set((s) => ({ documents: s.documents.filter((d) => d.id !== id) })),
+
+      addCalendarEvent: (e) => set((s) => ({ calendar: [...s.calendar, { ...e, id: uid('ev') }] })),
+      removeCalendarEvent: (id) => set((s) => ({ calendar: s.calendar.filter((e) => e.id !== id) })),
+
+      logIncident: (i) =>
+        set((s) => ({
+          incidents: [{ ...i, id: uid('inc') }, ...s.incidents],
+          events: [event('announcement', `Incident report filed by ${i.reportedBy}`), ...s.events],
+        })),
+      updateIncident: (id, patch) => set((s) => ({ incidents: s.incidents.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
+
+      addBoat: (b) => set((s) => ({ boats: [...s.boats, { ...b, id: uid('b') }] })),
+      updateBoat: (id, patch) => set((s) => ({ boats: s.boats.map((b) => (b.id === id ? { ...b, ...patch } : b)) })),
+      removeBoat: (id) => set((s) => ({ boats: s.boats.filter((b) => b.id !== id) })),
+
+      recordPayment: ({ familyId, registrationIds, method, memo }) =>
+        set((s) => {
+          const regs = s.registrations.filter((r) => registrationIds.includes(r.id))
+          const amount = regs.reduce((n, r) => n + r.price - r.paid, 0)
+          const fam = s.families.find((f) => f.id === familyId)
+          return {
+            registrations: s.registrations.map((r) => (registrationIds.includes(r.id) ? { ...r, status: r.status === 'pending-payment' ? 'confirmed' : r.status, paid: r.price } : r)),
+            ledger: [{ id: uid('pay'), at: new Date().toISOString(), familyId, registrationIds, amount, method, memo, recordedBy: 'Jordan Hale' }, ...s.ledger],
+            events: [event('payment', `${method === 'check' ? 'Check' : 'Cash'} payment recorded for the ${fam?.name} family · $${amount.toLocaleString()}`), ...s.events],
           }
         }),
     }),
     {
       name: 'burgee-demo-v1',
       storage: createJSONStorage(() => safeStorage),
-      version: 2,
+      version: 3,
       // Demo data shape changed: start older saved demos fresh.
       migrate: () => fresh() as never,
     }

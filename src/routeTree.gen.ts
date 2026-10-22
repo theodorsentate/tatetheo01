@@ -19,11 +19,20 @@ import { Route as errors404RouteImport } from './routes/(errors)/404'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAttendanceRouteImport } from './routes/admin/attendance'
+import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
+import { Route as AdminDirectoryRouteImport } from './routes/admin/directory'
+import { Route as AdminDocumentsRouteImport } from './routes/admin/documents'
+import { Route as AdminEquipmentRouteImport } from './routes/admin/equipment'
 import { Route as AdminFamiliesRouteImport } from './routes/admin/families'
 import { Route as AdminFormsRouteImport } from './routes/admin/forms'
+import { Route as AdminIncidentsRouteImport } from './routes/admin/incidents'
 import { Route as AdminMessagesRouteImport } from './routes/admin/messages'
+import { Route as AdminPaymentsRouteImport } from './routes/admin/payments'
 import { Route as AdminProgramsRouteImport } from './routes/admin/programs'
 import { Route as AdminRegistrationsRouteImport } from './routes/admin/registrations'
+import { Route as AdminReportsRouteImport } from './routes/admin/reports'
+import { Route as AdminSailorsRouteImport } from './routes/admin/sailors'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminStaffRouteImport } from './routes/admin/staff'
 import { Route as CoachIndexRouteImport } from './routes/coach/index'
@@ -87,6 +96,31 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminAttendanceRoute = AdminAttendanceRouteImport.update({
+  id: '/attendance',
+  path: '/attendance',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminCalendarRoute = AdminCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminDirectoryRoute = AdminDirectoryRouteImport.update({
+  id: '/directory',
+  path: '/directory',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminDocumentsRoute = AdminDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminEquipmentRoute = AdminEquipmentRouteImport.update({
+  id: '/equipment',
+  path: '/equipment',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminFamiliesRoute = AdminFamiliesRouteImport.update({
   id: '/families',
   path: '/families',
@@ -97,9 +131,19 @@ const AdminFormsRoute = AdminFormsRouteImport.update({
   path: '/forms',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminIncidentsRoute = AdminIncidentsRouteImport.update({
+  id: '/incidents',
+  path: '/incidents',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminMessagesRoute = AdminMessagesRouteImport.update({
   id: '/messages',
   path: '/messages',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminProgramsRoute = AdminProgramsRouteImport.update({
@@ -110,6 +154,16 @@ const AdminProgramsRoute = AdminProgramsRouteImport.update({
 const AdminRegistrationsRoute = AdminRegistrationsRouteImport.update({
   id: '/registrations',
   path: '/registrations',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminReportsRoute = AdminReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminSailorsRoute = AdminSailorsRouteImport.update({
+  id: '/sailors',
+  path: '/sailors',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -183,11 +237,20 @@ export interface FileRoutesByFullPath {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/admin/attendance': typeof AdminAttendanceRoute
+  '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/directory': typeof AdminDirectoryRoute
+  '/admin/documents': typeof AdminDocumentsRoute
+  '/admin/equipment': typeof AdminEquipmentRoute
   '/admin/families': typeof AdminFamiliesRoute
   '/admin/forms': typeof AdminFormsRoute
+  '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/messages': typeof AdminMessagesRoute
+  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/programs': typeof AdminProgramsRoute
   '/admin/registrations': typeof AdminRegistrationsRoute
+  '/admin/reports': typeof AdminReportsRoute
+  '/admin/sailors': typeof AdminSailorsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/coach/certs': typeof CoachCertsRoute
@@ -209,11 +272,20 @@ export interface FileRoutesByTo {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/admin/attendance': typeof AdminAttendanceRoute
+  '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/directory': typeof AdminDirectoryRoute
+  '/admin/documents': typeof AdminDocumentsRoute
+  '/admin/equipment': typeof AdminEquipmentRoute
   '/admin/families': typeof AdminFamiliesRoute
   '/admin/forms': typeof AdminFormsRoute
+  '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/messages': typeof AdminMessagesRoute
+  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/programs': typeof AdminProgramsRoute
   '/admin/registrations': typeof AdminRegistrationsRoute
+  '/admin/reports': typeof AdminReportsRoute
+  '/admin/sailors': typeof AdminSailorsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/coach/certs': typeof CoachCertsRoute
@@ -239,11 +311,20 @@ export interface FileRoutesById {
   '/(errors)/404': typeof errors404Route
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
+  '/admin/attendance': typeof AdminAttendanceRoute
+  '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/directory': typeof AdminDirectoryRoute
+  '/admin/documents': typeof AdminDocumentsRoute
+  '/admin/equipment': typeof AdminEquipmentRoute
   '/admin/families': typeof AdminFamiliesRoute
   '/admin/forms': typeof AdminFormsRoute
+  '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/messages': typeof AdminMessagesRoute
+  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/programs': typeof AdminProgramsRoute
   '/admin/registrations': typeof AdminRegistrationsRoute
+  '/admin/reports': typeof AdminReportsRoute
+  '/admin/sailors': typeof AdminSailorsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/coach/certs': typeof CoachCertsRoute
@@ -270,11 +351,20 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/admin/attendance'
+    | '/admin/calendar'
+    | '/admin/directory'
+    | '/admin/documents'
+    | '/admin/equipment'
     | '/admin/families'
     | '/admin/forms'
+    | '/admin/incidents'
     | '/admin/messages'
+    | '/admin/payments'
     | '/admin/programs'
     | '/admin/registrations'
+    | '/admin/reports'
+    | '/admin/sailors'
     | '/admin/settings'
     | '/admin/staff'
     | '/coach/certs'
@@ -296,11 +386,20 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/admin/attendance'
+    | '/admin/calendar'
+    | '/admin/directory'
+    | '/admin/documents'
+    | '/admin/equipment'
     | '/admin/families'
     | '/admin/forms'
+    | '/admin/incidents'
     | '/admin/messages'
+    | '/admin/payments'
     | '/admin/programs'
     | '/admin/registrations'
+    | '/admin/reports'
+    | '/admin/sailors'
     | '/admin/settings'
     | '/admin/staff'
     | '/coach/certs'
@@ -325,11 +424,20 @@ export interface FileRouteTypes {
     | '/(errors)/404'
     | '/(errors)/500'
     | '/(errors)/503'
+    | '/admin/attendance'
+    | '/admin/calendar'
+    | '/admin/directory'
+    | '/admin/documents'
+    | '/admin/equipment'
     | '/admin/families'
     | '/admin/forms'
+    | '/admin/incidents'
     | '/admin/messages'
+    | '/admin/payments'
     | '/admin/programs'
     | '/admin/registrations'
+    | '/admin/reports'
+    | '/admin/sailors'
     | '/admin/settings'
     | '/admin/staff'
     | '/coach/certs'
@@ -429,6 +537,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/attendance': {
+      id: '/admin/attendance'
+      path: '/attendance'
+      fullPath: '/admin/attendance'
+      preLoaderRoute: typeof AdminAttendanceRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/calendar': {
+      id: '/admin/calendar'
+      path: '/calendar'
+      fullPath: '/admin/calendar'
+      preLoaderRoute: typeof AdminCalendarRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/directory': {
+      id: '/admin/directory'
+      path: '/directory'
+      fullPath: '/admin/directory'
+      preLoaderRoute: typeof AdminDirectoryRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/documents': {
+      id: '/admin/documents'
+      path: '/documents'
+      fullPath: '/admin/documents'
+      preLoaderRoute: typeof AdminDocumentsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/equipment': {
+      id: '/admin/equipment'
+      path: '/equipment'
+      fullPath: '/admin/equipment'
+      preLoaderRoute: typeof AdminEquipmentRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/families': {
       id: '/admin/families'
       path: '/families'
@@ -443,11 +586,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminFormsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/incidents': {
+      id: '/admin/incidents'
+      path: '/incidents'
+      fullPath: '/admin/incidents'
+      preLoaderRoute: typeof AdminIncidentsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/messages': {
       id: '/admin/messages'
       path: '/messages'
       fullPath: '/admin/messages'
       preLoaderRoute: typeof AdminMessagesRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/payments': {
+      id: '/admin/payments'
+      path: '/payments'
+      fullPath: '/admin/payments'
+      preLoaderRoute: typeof AdminPaymentsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/programs': {
@@ -462,6 +619,20 @@ declare module '@tanstack/react-router' {
       path: '/registrations'
       fullPath: '/admin/registrations'
       preLoaderRoute: typeof AdminRegistrationsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/reports': {
+      id: '/admin/reports'
+      path: '/reports'
+      fullPath: '/admin/reports'
+      preLoaderRoute: typeof AdminReportsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/sailors': {
+      id: '/admin/sailors'
+      path: '/sailors'
+      fullPath: '/admin/sailors'
+      preLoaderRoute: typeof AdminSailorsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/settings': {
@@ -552,11 +723,20 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteRouteChildren {
+  AdminAttendanceRoute: typeof AdminAttendanceRoute
+  AdminCalendarRoute: typeof AdminCalendarRoute
+  AdminDirectoryRoute: typeof AdminDirectoryRoute
+  AdminDocumentsRoute: typeof AdminDocumentsRoute
+  AdminEquipmentRoute: typeof AdminEquipmentRoute
   AdminFamiliesRoute: typeof AdminFamiliesRoute
   AdminFormsRoute: typeof AdminFormsRoute
+  AdminIncidentsRoute: typeof AdminIncidentsRoute
   AdminMessagesRoute: typeof AdminMessagesRoute
+  AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminProgramsRoute: typeof AdminProgramsRoute
   AdminRegistrationsRoute: typeof AdminRegistrationsRoute
+  AdminReportsRoute: typeof AdminReportsRoute
+  AdminSailorsRoute: typeof AdminSailorsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminStaffRoute: typeof AdminStaffRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -564,11 +744,20 @@ interface AdminRouteRouteChildren {
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminAttendanceRoute: AdminAttendanceRoute,
+  AdminCalendarRoute: AdminCalendarRoute,
+  AdminDirectoryRoute: AdminDirectoryRoute,
+  AdminDocumentsRoute: AdminDocumentsRoute,
+  AdminEquipmentRoute: AdminEquipmentRoute,
   AdminFamiliesRoute: AdminFamiliesRoute,
   AdminFormsRoute: AdminFormsRoute,
+  AdminIncidentsRoute: AdminIncidentsRoute,
   AdminMessagesRoute: AdminMessagesRoute,
+  AdminPaymentsRoute: AdminPaymentsRoute,
   AdminProgramsRoute: AdminProgramsRoute,
   AdminRegistrationsRoute: AdminRegistrationsRoute,
+  AdminReportsRoute: AdminReportsRoute,
+  AdminSailorsRoute: AdminSailorsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminStaffRoute: AdminStaffRoute,
   AdminIndexRoute: AdminIndexRoute,

@@ -16,6 +16,11 @@ import {
   clubOverview,
   familyInfo,
   attendanceInfo,
+  calendarInfo,
+  documentsInfo,
+  equipmentInfo,
+  incidentsInfo,
+  staffDirectoryInfo,
   formRequestsInfo,
   formsInfo,
   moneyInfo,
@@ -62,28 +67,7 @@ export function getClaude(): Promise<SampleFn | null> {
   return samplePromise
 }
 
-export const ctxNow = (): Ctx => {
-  const st = useStore.getState()
-  return {
-    s: {
-      sessions: st.sessions,
-      families: st.families,
-      sailors: st.sailors,
-      coaches: st.coaches,
-      registrations: st.registrations,
-      groups: st.groups,
-      submissions: st.submissions,
-      announcements: st.announcements,
-      events: st.events,
-      attendance: st.attendance,
-      swimChecks: st.swimChecks,
-      customTemplates: st.customTemplates,
-      formRequests: st.formRequests,
-      settings: st.settings,
-    },
-    now: new Date(),
-  }
-}
+export const ctxNow = (): Ctx => ({ s: useStore.getState(), now: new Date() })
 
 const str = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : String(v))
 const scope = {
@@ -107,6 +91,11 @@ const LABELS: Record<string, string> = {
   attendance: 'Checking attendance',
   swim_checks: 'Checking swim checks',
   sent_forms: 'Checking sent forms',
+  staff_directory: 'Looking up staff',
+  documents: 'Searching documents',
+  calendar: 'Checking the calendar',
+  equipment: 'Checking boats',
+  incidents: 'Reading incident reports',
   draft_message: 'Drafting a message',
 }
 
@@ -208,6 +197,36 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
       name: 'sent_forms',
       description: 'One-off and season forms the director sent to families for signature (e.g. regatta permission slips): due date, how many signed, and who has not signed yet.',
       execute: wrap('sent_forms', () => formRequestsInfo(ctxNow())),
+    },
+    {
+      name: 'staff_directory',
+      description: 'Staff contacts: phone, email, role, emergency contact, groups they coach, notes. Filter by name (first name is fine) or role.',
+      inputSchema: { type: 'object', properties: { name: { type: 'string' }, role: { type: 'string' } } },
+      execute: wrap('staff_directory', (i) => staffDirectoryInfo(ctxNow(), { name: str(i.name), role: str(i.role) })),
+    },
+    {
+      name: 'documents',
+      description: 'Find certificate files (SafeSport, Level 1, CPR cards, etc.) by staff member and/or certification, or list which certifications have no file uploaded. Also lists club documents (emergency plan, handbook…). Each row has an href to open it.',
+      inputSchema: { type: 'object', properties: { person: { type: 'string' }, cert: { type: 'string' }, missingOnly: { type: 'boolean' } } },
+      execute: wrap('documents', (i) => documentsInfo(ctxNow(), { person: str(i.person), cert: str(i.cert), missingOnly: i.missingOnly === true })),
+    },
+    {
+      name: 'calendar',
+      description: 'Upcoming club events: regattas, deadlines, meetings, socials, trainings. Optionally the next N days, one kind, or a search term (e.g. "frostbite").',
+      inputSchema: { type: 'object', properties: { days: { type: 'number' }, kind: { type: 'string', enum: ['regatta', 'deadline', 'meeting', 'social', 'training'] }, search: { type: 'string' } } },
+      execute: wrap('calendar', (i) => calendarInfo(ctxNow(), { days: i.days ? Number(i.days) : undefined, kind: str(i.kind), search: str(i.search) })),
+    },
+    {
+      name: 'equipment',
+      description: 'Boats and coach boats: status (ready, needs-repair, out-of-service), issue, who uses it, last checked. Default returns only boats that need work.',
+      inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['all', 'ready', 'needs-repair', 'out-of-service'] }, kind: { type: 'string' } } },
+      execute: wrap('equipment', (i) => equipmentInfo(ctxNow(), { status: str(i.status), kind: str(i.kind) })),
+    },
+    {
+      name: 'incidents',
+      description: 'Incident reports (capsizes needing help, injuries, near misses, equipment failures): what happened, action taken, whether parents were told, open/closed.',
+      inputSchema: { type: 'object', properties: { status: { type: 'string', enum: ['all', 'open', 'closed'] } } },
+      execute: wrap('incidents', (i) => incidentsInfo(ctxNow(), { status: str(i.status) })),
     },
     {
       name: 'club_overview',

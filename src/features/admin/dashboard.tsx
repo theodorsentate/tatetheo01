@@ -9,10 +9,12 @@ import {
 } from 'date-fns'
 import {
   type AlertTriangle,
+  Anchor,
   Banknote,
   ClipboardCheck,
   Clock,
   ShieldAlert,
+  TriangleAlert,
   UserRoundX,
   Users,
 } from 'lucide-react'
@@ -51,6 +53,8 @@ export function AdminDashboard() {
   const events = useStore((s) => s.events)
   const sendFormReminders = useStore((s) => s.sendFormReminders)
   const attendance = useStore((s) => s.attendance)
+  const boats = useStore((s) => s.boats)
+  const incidents = useStore((s) => s.incidents)
   const stats = useSessionStats()
   const look = useLookups()
 
@@ -90,8 +94,32 @@ export function AdminDashboard() {
 
     // Certifications
     for (const c of coaches) {
-      for (const row of coachCertRows(c, CERT_TYPES, now, settings.certWarningDays)) {
-        if (row.status === 'valid') continue
+      const rows = coachCertRows(c, CERT_TYPES, now, settings.certWarningDays).filter((r) => r.status !== 'valid')
+      if (rows.length > 2) {
+        // A brand-new hire missing everything gets one line, not six.
+        const names = (st: string) => rows.filter((r) => r.status === st).map((r) => r.certType.name)
+        const parts = [
+          names('missing').length && `Missing: ${names('missing').join(', ')}.`,
+          names('expired').length && `Expired: ${names('expired').join(', ')}.`,
+          names('expiring').length && `Expiring soon: ${names('expiring').join(', ')}.`,
+        ].filter(Boolean)
+        items.push({
+          id: `c-${c.id}`,
+          tone: rows.some((r) => r.status !== 'expiring') ? 'danger' : 'signal',
+          icon: ShieldAlert,
+          title: `${c.name} needs ${rows.length} certifications`,
+          detail: parts.join(' '),
+          action: (
+            <Button asChild size='sm' variant='outline'>
+              <Link to='/admin/documents' search={{ person: c.id }}>
+                View files
+              </Link>
+            </Button>
+          ),
+        })
+        continue
+      }
+      for (const row of rows) {
         items.push({
           id: `c-${c.id}-${row.certType.id}`,
           tone: row.status === 'expiring' ? 'signal' : 'danger',
@@ -179,9 +207,42 @@ export function AdminDashboard() {
       })
     }
 
+    // Equipment and open incident reports
+    const down = boats.filter((b) => b.status !== 'ready')
+    if (down.length) {
+      const out = down.filter((b) => b.status === 'out-of-service')
+      items.push({
+        id: 'boats',
+        tone: out.some((b) => b.kind === 'RIB' || b.kind === 'Whaler') ? 'danger' : 'signal',
+        icon: Anchor,
+        title: `${down.length} boats need work${out.length ? `, ${out.length} out of service` : ''}`,
+        detail: down.slice(0, 3).map((b) => `${b.name}: ${b.issue ?? 'needs attention'}`).join('. '),
+        action: (
+          <Button asChild size='sm' variant='outline'>
+            <Link to='/admin/equipment'>Open fleet</Link>
+          </Button>
+        ),
+      })
+    }
+    const openInc = incidents.filter((i) => i.status === 'open')
+    if (openInc.length) {
+      items.push({
+        id: 'incidents',
+        tone: openInc.some((i) => i.severity === 'serious') ? 'danger' : 'neutral',
+        icon: TriangleAlert,
+        title: `${openInc.length} incident report${openInc.length > 1 ? 's' : ''} to review`,
+        detail: openInc.map((i) => `${i.reportedBy.split(' ')[0]}: ${i.description}`).slice(0, 2).join(' '),
+        action: (
+          <Button asChild size='sm' variant='outline'>
+            <Link to='/admin/incidents'>Review</Link>
+          </Button>
+        ),
+      })
+    }
+
     const order = { danger: 0, signal: 1, neutral: 2 }
     return items.sort((a, b) => order[a.tone] - order[b.tone])
-  }, [groups, look, coaches, now, settings, regs, sailors, submissions, sendFormReminders])
+  }, [groups, look, coaches, now, settings, regs, sailors, submissions, sendFormReminders, boats, incidents])
 
   const numbers = useMemo(() => {
     const summerSessions = sessions.filter((s) => s.termId === 'summer-27')

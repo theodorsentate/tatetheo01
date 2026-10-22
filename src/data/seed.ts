@@ -8,10 +8,15 @@ import type {
   AttendanceEntry,
   Coach,
   Family,
+  Boat,
+  ClubDocument,
+  ClubEvent,
   FormRequest,
   FormSubmission,
   FormTemplate,
   Group,
+  Incident,
+  LedgerEntry,
   Level,
   Registration,
   Sailor,
@@ -41,6 +46,12 @@ export type DemoState = {
   swimChecks: SwimCheck[]
   customTemplates: FormTemplate[]
   formRequests: FormRequest[]
+  formerCoaches: Coach[]
+  documents: ClubDocument[]
+  calendar: ClubEvent[]
+  incidents: Incident[]
+  boats: Boat[]
+  ledger: LedgerEntry[]
 }
 
 /** One-off form the director already sent this fall. */
@@ -227,7 +238,18 @@ export function createSeed(now: Date = new Date()): DemoState {
     phone: `(843) 555-${(1200 + i * 37).toString().slice(-4)}`,
     certs: certsFor(role, tweaks),
     avatarHue: (i * 47) % 360,
+    active: true,
+    startedSeason: pick(['Summer 2021', 'Summer 2022', 'Summer 2023', 'Summer 2024', 'Summer 2025', 'Fall 2025']),
+    school: role === 'program-director' ? undefined : pick(['College sophomore', 'College junior', 'College senior', 'High school senior', 'Graduate student', 'Teacher, year-round']),
+    emergencyContact: {
+      name: `${pick(PARENT_NAMES)} ${name.split(' ')[1]}`,
+      phone: `(843) 555-${(4100 + i * 29).toString().slice(-4)}`,
+      relationship: pick(['Mother', 'Father', 'Partner', 'Sister', 'Brother']),
+    },
   }))
+  coaches.find((c) => c.id === 'c-maya')!.notes = 'Runs the Green Team and leads new-coach onboarding. Prefers texts over calls on the water.'
+  coaches.find((c) => c.id === 'c-noah')!.notes = 'Available Tue/Thu only this fall (classes).'
+  coaches.find((c) => c.id === 'c-tessa')!.notes = 'Also covers the club pool lifeguard schedule on weekends.'
 
   /* ───────────── Families & sailors ───────────── */
   const families: Family[] = []
@@ -468,7 +490,19 @@ export function createSeed(now: Date = new Date()): DemoState {
     }
 
     const g3 = sess('green-camp-w3')
-    const ahead = registrations.filter((r) => r.sessionId === g3.id && r.status === 'waitlisted')
+    // Hazel should be second in line: make sure exactly one member family is ahead of her.
+    if (!registrations.some((r) => r.sessionId === g3.id && r.status === 'waitlisted')) {
+      const candidate = others.find(
+        (k) =>
+          eligibility(k, programById.get('green-camp')!, g3).ok &&
+          familyById.get(k.familyId)!.membership === 'member' &&
+          !registrations.some((r) => r.sailorId === k.id && r.sessionId === g3.id)
+      )
+      if (candidate) register(candidate, g3, subDays(now, 6), { forceStatus: 'waitlisted' })
+    }
+    const ahead = registrations
+      .filter((r) => r.sessionId === g3.id && r.status === 'waitlisted')
+      .sort((x, y) => x.createdAt.localeCompare(y.createdAt))
     // Ensure exactly one family is ahead of Hazel.
     ahead.slice(1).forEach((r) => (r.createdAt = subDays(now, 1).toISOString()))
     register(hazel, g3, subDays(now, 3), { forceStatus: 'waitlisted' })
@@ -751,11 +785,168 @@ export function createSeed(now: Date = new Date()): DemoState {
     })
   }
 
+  /* ───────────── Documents ───────────── */
+  const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const documents: ClubDocument[] = []
+  for (const c of coaches) {
+    for (const cert of c.certs) {
+      // A couple of renewals were recorded without the card being uploaded.
+      if ((c.id === 'c-owen' && cert.certTypeId === 'pwr') || (c.id === 'c-grace' && cert.certTypeId === 'fa')) continue
+      const ct = CERT_TYPES.find((x) => x.id === cert.certTypeId)!
+      const img = chance(0.4)
+      documents.push({
+        id: id('doc'),
+        title: ct.name,
+        kind: 'certification',
+        coachId: c.id,
+        certTypeId: ct.id,
+        fileName: `${slug(c.name)}-${slug(ct.name)}.${img ? 'jpg' : 'pdf'}`,
+        mime: img ? 'image/jpeg' : 'application/pdf',
+        sizeBytes: Math.floor(180_000 + rand() * 900_000),
+        uploadedAt: new Date(`${cert.issued}T15:00:00`).toISOString(),
+        uploadedBy: chance(0.6) ? c.name : 'Jordan Hale',
+        expires: cert.expires,
+        sample: true,
+      })
+    }
+  }
+  const clubDocs: [string, string, string][] = [
+    ['Emergency Action Plan 2026–27', 'Who calls 911, where the AED is, launch-area evacuation and the coach-boat radio channel.', 'emergency-action-plan-2026-27.pdf'],
+    ['Junior Program Handbook', 'Program levels, daily schedule, what to bring, pickup rules and the parent code of conduct.', 'junior-program-handbook.pdf'],
+    ['Coach Code of Conduct', 'Signed by every coach each season. SafeSport-aligned rules on one-on-one contact and messaging.', 'coach-code-of-conduct.pdf'],
+    ['Weather & Small Craft Advisory Policy', 'Wind and lightning limits by fleet, and who makes the call.', 'weather-policy.pdf'],
+    ['Coach Boat & Launch Checklist', 'Daily pre-launch checks for RIBs and Whalers: kill cord, fuel, radio, first aid kit.', 'coach-boat-checklist.pdf'],
+    ['Concussion Protocol', 'Signs to watch for, removal from activity, and return-to-sail steps.', 'concussion-protocol.pdf'],
+    ['Certificate of Insurance 2026', 'Club liability coverage for junior programs and regattas.', 'certificate-of-insurance-2026.pdf'],
+  ]
+  clubDocs.forEach(([title, description, fileName], i) =>
+    documents.push({
+      id: id('doc'),
+      title,
+      kind: 'club',
+      fileName,
+      mime: 'application/pdf',
+      sizeBytes: Math.floor(220_000 + rand() * 1_600_000),
+      uploadedAt: subDays(now, 40 + i * 9).toISOString(),
+      uploadedBy: 'Jordan Hale',
+      description,
+      sample: true,
+    })
+  )
+
+  /* ───────────── Calendar ───────────── */
+  const calendar: ClubEvent[] = [
+    { id: id('ev'), title: 'Junior committee meeting', kind: 'meeting', date: '2026-10-27', time: '7:00 PM', location: 'Club library' },
+    { id: id('ev'), title: 'Summer registration opens to non-members', kind: 'deadline', date: '2026-11-01' },
+    { id: id('ev'), title: 'Frostbite permission slips due', kind: 'deadline', date: '2026-11-02', programIds: ['green-team'] },
+    { id: id('ev'), title: 'Frostbite Green Fleet Regatta', kind: 'regatta', date: '2026-11-07', time: 'Launch 9:30 AM, first warning 11:00', location: 'Saltmarsh Bay YC', programIds: ['green-team'], notes: 'Spectator boat available, reserve with Maya.' },
+    { id: id('ev'), title: 'Fall Championship Regatta', kind: 'regatta', date: '2026-11-14', endDate: '2026-11-15', time: 'Both days 10:00 AM', location: 'Bayside Sailing Association', programIds: ['rwb-team', '420-team', 'ilca-team'] },
+    { id: id('ev'), title: 'Fall season wrap and team pizza party', kind: 'social', date: '2026-11-21', time: '12:30 PM', location: 'Junior shed' },
+    { id: id('ev'), title: 'Coach First Aid & CPR recertification', kind: 'training', date: '2026-12-05', time: '9:00 AM – 1:00 PM', location: 'Club ballroom', notes: 'Maya, Ruby and Tessa need this one.' },
+    { id: id('ev'), title: 'Spring early-bird pricing ends', kind: 'deadline', date: '2026-12-15' },
+    { id: id('ev'), title: 'Summer early-bird pricing ends', kind: 'deadline', date: '2027-01-31' },
+    { id: id('ev'), title: 'Spring season starts', kind: 'training', date: '2027-03-02', programIds: ['green-team', 'rwb-team', '420-team', 'ilca-team'] },
+    { id: id('ev'), title: 'Spring Invitational', kind: 'regatta', date: '2027-04-17', endDate: '2027-04-18', location: 'Saltmarsh Bay YC', programIds: ['rwb-team', '420-team'] },
+    { id: id('ev'), title: 'Summer coach onboarding weekend', kind: 'training', date: '2027-06-05', endDate: '2027-06-06', location: 'Junior shed' },
+    { id: id('ev'), title: 'Junior awards banquet', kind: 'social', date: '2027-08-07', time: '6:00 PM', location: 'Club lawn' },
+  ]
+
+  /* ───────────── Incidents ───────────── */
+  const rosterOf = (sid: string) => registrations.filter((r) => r.sessionId === sid && r.status === 'confirmed').map((r) => r.sailorId)
+  const rwb = rosterOf('rwb-team-fall-26')
+  const grn = rosterOf('green-team-fall-26')
+  const hs = rosterOf('420-team-fall-26')
+  const incidents: Incident[] = [
+    {
+      id: id('inc'),
+      at: new Date('2026-10-20T16:20:00').toISOString(),
+      sessionId: '420-team-fall-26',
+      sailorIds: hs.slice(0, 2),
+      type: 'near-miss',
+      severity: 'minor',
+      description: 'Two 420s came within a boat length on opposite tacks rounding the leeward mark. No contact.',
+      actionTaken: 'Stopped the drill and ran a quick port/starboard refresher on the water.',
+      parentsNotified: false,
+      reportedBy: 'Eli Navarro',
+      status: 'open',
+    },
+    {
+      id: id('inc'),
+      at: new Date('2026-10-17T10:45:00').toISOString(),
+      sessionId: 'rwb-team-fall-26',
+      sailorIds: [],
+      type: 'equipment',
+      severity: 'moderate',
+      description: 'RIB 2 "Heron" outboard stalled twice at idle during Saturday practice.',
+      actionTaken: 'Whaler 4 covered the group. RIB 2 tagged out until the mechanic visit.',
+      parentsNotified: false,
+      reportedBy: 'Owen Pryce',
+      status: 'open',
+    },
+    {
+      id: id('inc'),
+      at: new Date('2026-10-15T16:40:00').toISOString(),
+      sessionId: 'rwb-team-fall-26',
+      sailorIds: rwb.slice(2, 3),
+      type: 'capsize-rescue',
+      severity: 'minor',
+      description: 'Capsized in a 15-knot gust near the windward mark and couldn’t right the boat after two tries.',
+      actionTaken: 'Coach boat pulled the sailor aboard in under a minute; boat towed in. Warmed up and finished practice ashore.',
+      parentsNotified: true,
+      notifiedHow: 'Text at 4:55 PM',
+      reportedBy: 'Liam Becker',
+      status: 'closed',
+    },
+    {
+      id: id('inc'),
+      at: new Date('2026-10-08T17:10:00').toISOString(),
+      sessionId: 'green-team-fall-26',
+      sailorIds: grn.slice(3, 4),
+      type: 'injury',
+      severity: 'minor',
+      description: 'Bumped head on the boom during a tack.',
+      actionTaken: 'Ice pack, sat out the rest of practice, watched for concussion signs per protocol. No symptoms.',
+      parentsNotified: true,
+      notifiedHow: 'Spoke with parent at pickup',
+      reportedBy: 'Maya Ortiz',
+      status: 'closed',
+    },
+  ]
+
+  /* ───────────── Boats & equipment ───────────── */
+  const fleet: Boat[] = []
+  for (let n = 1; n <= 24; n++)
+    fleet.push({ id: id('b'), kind: 'Opti', name: `Opti #${2100 + n}`, status: 'ready', assignedTo: n <= 10 ? 'Opti Green Team' : 'Opti Race Team', lastInspected: iso(subDays(now, 5 + Math.floor(rand() * 40))) })
+  for (let n = 11; n <= 18; n++)
+    fleet.push({ id: id('b'), kind: 'Club 420', name: `C420 #${n}`, status: 'ready', assignedTo: 'High School 420 Team', lastInspected: iso(subDays(now, 5 + Math.floor(rand() * 40))) })
+  for (let n = 1; n <= 6; n++)
+    fleet.push({ id: id('b'), kind: 'ILCA', name: `ILCA #${n}`, status: 'ready', assignedTo: 'ILCA Team', lastInspected: iso(subDays(now, 5 + Math.floor(rand() * 40))) })
+  ;[
+    ['RIB', 'RIB 1 "Osprey"'],
+    ['RIB', 'RIB 2 "Heron"'],
+    ['RIB', 'RIB 3 "Pelican"'],
+    ['Whaler', 'Whaler 4'],
+    ['Whaler', 'Whaler 5'],
+  ].forEach(([kind, name]) => fleet.push({ id: id('b'), kind: kind as Boat['kind'], name, status: 'ready', assignedTo: 'Coach boat', lastInspected: iso(subDays(now, 2 + Math.floor(rand() * 10))) }))
+  const fix = (name: string, status: Boat['status'], issue: string) => Object.assign(fleet.find((b) => b.name === name)!, { status, issue })
+  fix('Opti #2104', 'needs-repair', 'Daggerboard trunk cracked at the top edge')
+  fix('Opti #2117', 'needs-repair', 'Sail torn along the luff, sent to the loft')
+  fix('Opti #2122', 'out-of-service', 'Hull crack below the waterline, awaiting fiberglass repair')
+  fix('C420 #15', 'needs-repair', 'Spinnaker halyard frayed')
+  fix('ILCA #4', 'needs-repair', 'Mainsheet block cracked')
+  fix('RIB 2 "Heron"', 'out-of-service', 'Outboard stalls at idle. Mechanic booked for Tuesday.')
+
   return {
     sessions,
     families,
     sailors,
     coaches,
+    formerCoaches: [],
+    documents,
+    calendar,
+    incidents,
+    boats: fleet,
+    ledger: [],
     registrations,
     groups,
     submissions,

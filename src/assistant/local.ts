@@ -12,7 +12,13 @@ import {
   type AssistantAction,
   type Ctx,
   attendanceInfo,
+  calendarInfo,
+  documentsInfo,
+  equipmentInfo,
   familyInfo,
+  findStaff,
+  incidentsInfo,
+  staffDirectoryInfo,
   findSessions,
   formRequestsInfo,
   formsInfo,
@@ -89,6 +95,67 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
   }
 
   const famMentioned = ctx.s.families.find((f) => new RegExp(`\\b${f.name.toLowerCase()}s?\\b`).test(q))
+
+  const staff = findStaff(ctx, q)
+
+  /* Staff contact details */
+  if (staff && /\b(phone|number|cell|email|e-mail|contact|call|reach|text)\b/.test(q) && !/\bcert/.test(q)) {
+    const r = staffDirectoryInfo(ctx, { name: staff.name }).rows[0]
+    actions.push({ kind: 'link', label: 'Open staff directory', href: '/admin/directory' })
+    return {
+      text: `**${r.name}**: ${r.phone}, ${r.email}.${r.emergencyContact ? ` Emergency contact: ${r.emergencyContact}.` : ''}${r.groups.length ? ` Coaching ${r.groups.join(', ')}.` : ''}${r.notes ? `\n\n${r.notes}` : ''}`,
+      actions,
+    }
+  }
+
+  /* Documents and certificate files */
+  if (/certificate|\bcards?\b|document|\bdocs?\b|\bfiles?\b|\bpdf\b|upload|copy of|emergency (action )?plan|handbook|policy/.test(q)) {
+    const certId = matchCert(q)
+    const res = documentsInfo(ctx, { person: staff?.name, cert: certId, missingOnly: /missing|haven.?t|no file|without/.test(q) })
+    actions.push({ kind: 'link', label: 'Open documents', href: staff || certId ? res.rows[0]?.href ?? '/admin/documents' : '/admin/documents' })
+    if (!staff && !certId && /plan|handbook|policy|protocol|insurance|club doc/.test(q))
+      return { text: `Club documents on file:\n\n${list(res.clubDocuments)}`, actions }
+    if (!res.rows.length) return { text: 'No certification records match that.', actions }
+    return {
+      text:
+        (res.missingFiles && !staff ? `**${res.missingFiles} certifications** have no file uploaded.\n\n` : '') +
+        list(res.rows.map((r) => `[${r.staff}](${r.href}), ${r.cert}: ${r.file ? r.file : 'no file on record'}${r.expires ? `, valid to ${r.expires}` : ''}${r.status !== 'valid' ? ` (**${r.status}**)` : ''}`), 15),
+      actions,
+    }
+  }
+
+  /* Incidents */
+  if (/incident|injur|accident|near.?miss|hurt|capsiz/.test(q)) {
+    const res = incidentsInfo(ctx, { status: /open|unresolved|follow/.test(q) ? 'open' : 'all' })
+    actions.push({ kind: 'link', label: 'Open incident reports', href: '/admin/incidents' })
+    if (!res.incidents.length) return { text: 'No incident reports.', actions }
+    return {
+      text: list(res.incidents.map((i) => `**${i.when}** (${i.type.replace('-', ' ')}, ${i.severity}, ${i.status}): ${i.description} Parents told: ${i.parentsNotified}.`), 8),
+      actions,
+    }
+  }
+
+  /* Boats */
+  if (/\b(boats?|ribs?|whalers?|outboard|motor|fleet|equipment|optis)\b/.test(q) && /repair|broken|fix|work|ready|status|service|down|need|wrong/.test(q)) {
+    const res = equipmentInfo(ctx, {})
+    actions.push({ kind: 'link', label: 'Open boats & equipment', href: '/admin/equipment' })
+    return {
+      text: `**${res.totals.ready} of ${res.totals.all}** boats are ready. These need work:\n\n${list(res.boats.map((b) => `**${b.name}** (${b.status.replace(/-/g, ' ')}): ${b.issue ?? 'no details'}`))}`,
+      actions,
+    }
+  }
+
+  /* Calendar */
+  if (/coming up|upcoming|calendar|schedule|when is|when's|regatta|deadline|this weekend|next week|events?\b|banquet|meeting/.test(q)) {
+    const term = q.match(/frostbite|championship|invitational|banquet|meeting|pizza|cpr|onboarding|early.?bird/)?.[0]
+    const res = calendarInfo(ctx, { search: term?.replace(/\s+/g, ' '), days: /week/.test(q) ? 7 : 60 })
+    actions.push({ kind: 'link', label: 'Open calendar', href: '/admin/calendar' })
+    if (!res.events.length) return { text: 'Nothing on the calendar for that.', actions }
+    return {
+      text: list(res.events.map((e) => `**${e.date}**: ${e.title}${e.time ? `, ${e.time}` : ''}${e.location ? ` at ${e.location}` : ''}`), 10),
+      actions,
+    }
+  }
 
   /* One-off forms sent to families (permission slips) */
   if (/permission|slip|frostbite|sent (a |the )?form|forms? (we|i) sent/.test(q)) {

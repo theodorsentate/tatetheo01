@@ -206,6 +206,91 @@ export type Coach = {
   activities: Activity[]
   certs: Certification[]
   avatarHue: number
+  /** Directory details. */
+  emergencyContact?: { name: string; phone: string; relationship: string }
+  startedSeason?: string // "Summer 2023"
+  school?: string
+  notes?: string
+  /** Removed staff stay in history (attendance, documents) but leave rosters. */
+  active?: boolean
+}
+
+/* ───────────── Documents ───────────── */
+
+export type ClubDocument = {
+  id: ID
+  title: string
+  kind: 'certification' | 'club' | 'other'
+  /** Certification documents belong to a staff member and a cert type. */
+  coachId?: ID
+  certTypeId?: ID
+  fileName: string
+  mime: string
+  sizeBytes: number
+  uploadedAt: ISODateTime
+  uploadedBy: string
+  /** Expiry shown on the card (certifications). */
+  expires?: ISODate
+  /** Uploaded image/PDF kept in the demo (small files only). */
+  dataUrl?: string
+  /** Seeded examples render a placeholder preview. */
+  sample?: boolean
+  description?: string
+}
+
+/* ───────────── Calendar ───────────── */
+
+export type ClubEvent = {
+  id: ID
+  title: string
+  kind: 'regatta' | 'deadline' | 'meeting' | 'social' | 'training'
+  date: ISODate
+  endDate?: ISODate
+  time?: string
+  location?: string
+  programIds?: ID[]
+  notes?: string
+}
+
+/* ───────────── Safety ───────────── */
+
+export type Incident = {
+  id: ID
+  at: ISODateTime
+  sessionId?: ID
+  sailorIds: ID[]
+  type: 'capsize-rescue' | 'injury' | 'near-miss' | 'equipment' | 'behavior' | 'weather' | 'other'
+  severity: 'minor' | 'moderate' | 'serious'
+  description: string
+  actionTaken: string
+  parentsNotified: boolean
+  notifiedHow?: string
+  reportedBy: string
+  status: 'open' | 'closed'
+}
+
+/* ───────────── Equipment ───────────── */
+
+export type Boat = {
+  id: ID
+  kind: 'Opti' | 'Club 420' | 'ILCA' | 'RIB' | 'Whaler' | 'Other'
+  name: string // sail number or boat name
+  status: 'ready' | 'needs-repair' | 'out-of-service'
+  assignedTo?: string // program or group
+  lastInspected?: ISODate
+  issue?: string
+}
+
+/** Money received outside the card flow (a check, cash) or given back. */
+export type LedgerEntry = {
+  id: ID
+  at: ISODateTime
+  familyId: ID
+  registrationIds: ID[]
+  amount: number // negative = refund
+  method: 'card' | 'check' | 'cash' | 'refund'
+  memo: string
+  recordedBy: string
 }
 
 /** A roster group within one session, e.g. "Green A" with two coaches. */

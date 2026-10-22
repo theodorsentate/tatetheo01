@@ -496,6 +496,125 @@ export function formRequestsInfo(ctx: Ctx) {
   })
 }
 
+const findStaff = (ctx: Ctx, text?: string) => {
+  if (!text) return undefined
+  const t = text.toLowerCase()
+  return ctx.s.coaches.find((c) => t.includes(c.name.toLowerCase())) ?? ctx.s.coaches.find((c) => new RegExp(`\\b${c.name.split(' ')[0].toLowerCase()}('s)?\\b`).test(t))
+}
+export { findStaff }
+
+/** Staff directory: contacts, emergency contact, rosters, notes. */
+export function staffDirectoryInfo(ctx: Ctx, q: { name?: string; role?: string }) {
+  const { s } = ctx
+  const person = findStaff(ctx, q.name)
+  return {
+    directoryPage: '/admin/directory',
+    rows: s.coaches
+      .filter((c) => !q.name || c === person || c.name.toLowerCase().includes(q.name.toLowerCase()))
+      .filter((c) => !q.role || c.role.includes(q.role.toLowerCase().replace(/\s+/g, '-')))
+      .map((c) => ({
+        name: c.name,
+        role: c.role,
+        phone: c.phone,
+        email: c.email,
+        emergencyContact: c.emergencyContact ? `${c.emergencyContact.name} (${c.emergencyContact.relationship}) ${c.emergencyContact.phone}` : undefined,
+        onStaffSince: c.startedSeason,
+        notes: c.notes,
+        groups: s.groups.filter((g) => g.coachIds.includes(c.id)).map((g) => g.name),
+      })),
+    formerStaff: s.formerCoaches.map((c) => c.name),
+  }
+}
+
+/** Certification files and club documents. */
+export function documentsInfo(ctx: Ctx, q: { person?: string; cert?: string; missingOnly?: boolean }) {
+  const { s, now } = ctx
+  const certId = matchCert(q.cert)
+  const person = findStaff(ctx, q.person)
+  const rows = s.coaches
+    .filter((c) => !q.person || c === person)
+    .flatMap((c) =>
+      coachCertRows(c, CERT_TYPES, now, s.settings.certWarningDays)
+        .filter((r) => !certId || r.certType.id === certId)
+        .map((r) => {
+          const doc = s.documents.find((d) => d.coachId === c.id && d.certTypeId === r.certType.id)
+          return {
+            staff: c.name,
+            cert: r.certType.name,
+            status: r.status,
+            expires: r.expires ? d(r.expires) + `, ${r.expires.slice(0, 4)}` : undefined,
+            file: doc ? `${doc.fileName} (uploaded ${format(new Date(doc.uploadedAt), 'MMM d, yyyy')})` : null,
+            href: `/admin/documents?person=${c.id}${certId ? `&cert=${certId}` : ''}`,
+          }
+        })
+    )
+    .filter((r) => !q.missingOnly || !r.file)
+  return {
+    rows: rows.slice(0, 60),
+    missingFiles: rows.filter((r) => !r.file).length,
+    clubDocuments: s.documents.filter((x) => x.kind === 'club').map((x) => x.title),
+    documentsPage: '/admin/documents',
+  }
+}
+
+/** Club calendar: regattas, deadlines, meetings, socials, trainings. */
+export function calendarInfo(ctx: Ctx, q: { days?: number; kind?: string; search?: string }) {
+  const today = format(ctx.now, 'yyyy-MM-dd')
+  const until = format(new Date(ctx.now.getTime() + (q.days ?? 60) * 86400000), 'yyyy-MM-dd')
+  return {
+    events: ctx.s.calendar
+      .filter((e) => (e.endDate ?? e.date) >= today && (q.search ? true : e.date <= until))
+      .filter((e) => !q.kind || e.kind === q.kind)
+      .filter((e) => !q.search || `${e.title} ${e.location ?? ''}`.toLowerCase().includes(q.search.toLowerCase()))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((e) => ({
+        title: e.title,
+        kind: e.kind,
+        date: `${format(new Date(`${e.date}T12:00:00`), 'EEE MMM d')}${e.endDate ? `–${d(e.endDate)}` : ''}`,
+        time: e.time,
+        location: e.location,
+        programs: e.programIds?.map((p) => programById.get(p)?.name),
+        notes: e.notes,
+      })),
+    calendarPage: '/admin/calendar',
+  }
+}
+
+export function equipmentInfo(ctx: Ctx, q: { status?: string; kind?: string }) {
+  const boats = ctx.s.boats
+    .filter((b) => !q.kind || b.kind.toLowerCase().includes(q.kind.toLowerCase()))
+    .filter((b) => (q.status === 'all' ? true : q.status ? b.status === q.status : b.status !== 'ready'))
+  return {
+    totals: { all: ctx.s.boats.length, ready: ctx.s.boats.filter((b) => b.status === 'ready').length, needsRepair: ctx.s.boats.filter((b) => b.status === 'needs-repair').length, outOfService: ctx.s.boats.filter((b) => b.status === 'out-of-service').length },
+    boats: boats.map((b) => ({ name: b.name, kind: b.kind, status: b.status, issue: b.issue, usedBy: b.assignedTo, lastChecked: b.lastInspected })),
+    equipmentPage: '/admin/equipment',
+  }
+}
+
+export function incidentsInfo(ctx: Ctx, q: { status?: string }) {
+  const { s } = ctx
+  return {
+    incidents: s.incidents
+      .filter((i) => !q.status || q.status === 'all' || i.status === q.status)
+      .map((i) => ({
+        when: format(new Date(i.at), 'EEE MMM d, h:mm a'),
+        type: i.type,
+        severity: i.severity,
+        status: i.status,
+        session: i.sessionId ? sessionLabel(s.sessions.find((x) => x.id === i.sessionId)!) : undefined,
+        sailors: i.sailorIds.map((id) => {
+          const k = s.sailors.find((x) => x.id === id)
+          return k ? `${k.firstName} ${k.lastName}` : ''
+        }),
+        description: i.description,
+        actionTaken: i.actionTaken,
+        parentsNotified: i.parentsNotified ? (i.notifiedHow ?? 'yes') : 'no',
+        reportedBy: i.reportedBy,
+      })),
+    incidentsPage: '/admin/incidents',
+  }
+}
+
 /** Live "needs attention" list — the same items the Today page shows. */
 export function briefing(ctx: Ctx) {
   const certs = staffCertifications(ctx, { status: 'needs-action' }).rows.map(

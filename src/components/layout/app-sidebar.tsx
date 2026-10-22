@@ -25,6 +25,9 @@ export function AppSidebar() {
   const sailors = useStore((s) => s.sailors)
   const submissions = useStore((s) => s.submissions)
   const settings = useStore((s) => s.settings)
+  const incidents = useStore((s) => s.incidents)
+  const boats = useStore((s) => s.boats)
+  const documents = useStore((s) => s.documents)
   const now = useNow(60_000)
 
   const nav = useMemo(() => {
@@ -37,8 +40,14 @@ export function AppSidebar() {
       outstandingForms: sailors.filter(
         (s) => active.has(s.id) && outstandingForms(s, FORM_TEMPLATES, submissions, settings.season).length > 0
       ).length,
+      openIncidents: incidents.filter((i) => i.status === 'open').length,
+      boatIssues: boats.filter((b) => b.status !== 'ready').length,
+      missingDocs: coaches.reduce(
+        (n, c) => n + c.certs.filter((cert) => !documents.some((d) => d.coachId === c.id && d.certTypeId === cert.certTypeId)).length,
+        0
+      ),
     })
-  }, [regs, coaches, sailors, submissions, settings, now])
+  }, [regs, coaches, sailors, submissions, settings, now, incidents, boats, documents])
 
   return (
     <Sidebar collapsible={collapsible} variant={variant}>
