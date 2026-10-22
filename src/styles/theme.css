@@ -1,0 +1,138 @@
+/*
+ * Burgee tokens.
+ * Harbor ink for structure, tide blue for action, burgee red only for the
+ * mark and real problems, signal amber for "needs a decision", seaglass for
+ * "all good". Fleet colors (see domain/rules LEVELS) are reserved for fleets.
+ */
+:root {
+  --radius: 0.5rem;
+  --background: #f4f6f6;
+  --foreground: #10222f;
+  --card: #ffffff;
+  --card-foreground: #10222f;
+  --popover: #ffffff;
+  --popover-foreground: #10222f;
+  --primary: #17496e;
+  --primary-foreground: #ffffff;
+  --secondary: #e7eef2;
+  --secondary-foreground: #10222f;
+  --muted: #eef2f4;
+  --muted-foreground: #586a77;
+  --accent: #e4edf3;
+  --accent-foreground: #10222f;
+  --destructive: #c8342b;
+  --border: #dbe3e8;
+  --input: #ccd7de;
+  --ring: #17496e;
+
+  --signal: #b9820f;
+  --signal-soft: #fbf1d9;
+  --ok: #2f7d6b;
+  --ok-soft: #e1f1ec;
+  --danger-soft: #fae6e4;
+  --burgee: #c8342b;
+
+  --chart-1: #17496e;
+  --chart-2: #2f7d6b;
+  --chart-3: #e0a526;
+  --chart-4: #c8342b;
+  --chart-5: #7b93a6;
+
+  --sidebar: #0f2433;
+  --sidebar-foreground: #c9d7e0;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #0f2433;
+  --sidebar-accent: #193649;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #1c3a4e;
+  --sidebar-ring: #7fb3da;
+}
+
+.dark {
+  --background: #0a1821;
+  --foreground: #e3ecf1;
+  --card: #0f212d;
+  --card-foreground: #e3ecf1;
+  --popover: #112634;
+  --popover-foreground: #e3ecf1;
+  --primary: #8cc0e6;
+  --primary-foreground: #0a1821;
+  --secondary: #182f3e;
+  --secondary-foreground: #e3ecf1;
+  --muted: #152a38;
+  --muted-foreground: #92a6b3;
+  --accent: #1a3343;
+  --accent-foreground: #e3ecf1;
+  --destructive: #ef6b61;
+  --border: #213a4a;
+  --input: #2a4556;
+  --ring: #8cc0e6;
+
+  --signal: #f0c053;
+  --signal-soft: #3a2f14;
+  --ok: #6cc7ae;
+  --ok-soft: #133a32;
+  --danger-soft: #3d1a18;
+  --burgee: #e2483e;
+
+  --chart-1: #8cc0e6;
+  --chart-2: #6cc7ae;
+  --chart-3: #f0c053;
+  --chart-4: #ef6b61;
+  --chart-5: #92a6b3;
+
+  --sidebar: #07131b;
+  --sidebar-foreground: #b6c7d2;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #07131b;
+  --sidebar-accent: #13283a;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #172d3d;
+  --sidebar-ring: #8cc0e6;
+}
+
+@theme inline {
+  --font-sans: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 3px);
+  --radius-md: calc(var(--radius) - 1px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-danger-soft: var(--danger-soft);
+  --color-burgee: var(--burgee);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
