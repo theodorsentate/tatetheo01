@@ -8,7 +8,6 @@ import { AppSidebar } from '@/components/layout/app-sidebar'
 import { Header } from '@/components/layout/header'
 import { Search } from '@/components/search'
 import { SkipToMain } from '@/components/skip-to-main'
-import { ThemeSwitch } from '@/components/theme-switch'
 import { AskButton, AskPanel } from '@/assistant/ask-panel'
 
 /** Director workspace: dark harbor sidebar + a sticky search header. */
@@ -28,9 +27,8 @@ export function AdminLayout() {
             )}
           >
             <Header fixed>
-              <Search placeholder='Search sailors, families, sessions' className='me-auto md:w-80 lg:w-96' />
+              <Search placeholder='Search sailors and families' className='me-auto md:w-80 lg:w-96' />
               <AskButton />
-              <ThemeSwitch />
             </Header>
             <Outlet />
             <AskPanel />

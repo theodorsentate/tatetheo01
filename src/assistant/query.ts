@@ -69,8 +69,9 @@ export function matchTerm(text?: string): string | undefined {
   if (!text) return undefined
   const t = text.toLowerCase()
   if (TERMS.some((x) => x.id === t)) return t
+  if (/this week|right now|today|this season|currently/.test(t)) return 'now'
   if (/summer|camp week|\bweek\s*\d/.test(t)) return 'summer-27'
-  if (/fall|autumn|this season|right now|today|this week/.test(t)) return 'fall-26'
+  if (/fall|autumn/.test(t)) return 'fall-27'
   if (/spring/.test(t)) return 'spring-27'
   return undefined
 }
@@ -87,12 +88,17 @@ export function findSessions(ctx: Ctx, q: { program?: string; term?: string; wee
   if (q.sessionId) return ctx.s.sessions.filter((s) => s.id === q.sessionId)
   const programs = matchPrograms(q.program)
   const week = matchWeek(q.week)
+  const today = format(ctx.now, 'yyyy-MM-dd')
   let term = matchTerm(q.term) ?? (week ? 'summer-27' : undefined)
-  if (!term && programs.length && programs.every((id) => programById.get(id)!.format === 'team')) term = 'fall-26'
+  // Teams: the season running now, else the next one.
+  if (!term && programs.length && programs.every((id) => programById.get(id)!.format === 'team'))
+    term = TERMS.find((t) => t.season !== 'summer' && t.endDate >= today)?.id
+  // A camp with no week named means this week's session.
+  if (!term && !week && programs.length && programs.every((id) => programById.get(id)!.format === 'camp')) term = 'now'
   return ctx.s.sessions.filter(
     (s) =>
       (!programs.length || programs.includes(s.programId)) &&
-      (!term || s.termId === term) &&
+      (term === 'now' ? s.startDate <= today && s.endDate >= today : !term || s.termId === term) &&
       (!week || s.name === `Week ${week}`)
   )
 }
@@ -329,39 +335,10 @@ export function familyInfo(ctx: Ctx, q: { name: string }) {
         registrations: regs.map((r) => ({
           sailor: kids.find((k) => k.id === r.sailorId)!.firstName,
           session: sessionLabel(s.sessions.find((x) => x.id === r.sessionId)!),
-          status: r.status,
-          price: r.price,
-          paid: r.paid,
+          status: r.status === 'pending-payment' ? 'confirmed' : r.status,
         })),
-        balanceDue: regs.filter((r) => r.status === 'pending-payment').reduce((n, r) => n + r.price - r.paid, 0),
       }
     }),
-  }
-}
-
-export function moneyInfo(ctx: Ctx) {
-  const { s } = ctx
-  const live = s.registrations.filter((r) => ACTIVE_STATUSES.has(r.status))
-  const sailorById = new Map(s.sailors.map((x) => [x.id, x]))
-  const byFamily = new Map<string, { due: number; items: string[] }>()
-  for (const r of live.filter((x) => x.status === 'pending-payment')) {
-    const k = sailorById.get(r.sailorId)!
-    const e = byFamily.get(k.familyId) ?? { due: 0, items: [] }
-    e.due += r.price - r.paid
-    e.items.push(`${k.firstName}: ${sessionLabel(s.sessions.find((x) => x.id === r.sessionId)!)}`)
-    byFamily.set(k.familyId, e)
-  }
-  const byTerm = TERMS.map((t) => {
-    const ids = new Set(s.sessions.filter((x) => x.termId === t.id).map((x) => x.id))
-    const rs = live.filter((r) => ids.has(r.sessionId))
-    return { term: t.name, booked: Math.round(rs.reduce((n, r) => n + r.price, 0)), collected: Math.round(rs.reduce((n, r) => n + r.paid, 0)) }
-  })
-  return {
-    totalOutstanding: Math.round([...byFamily.values()].reduce((n, e) => n + e.due, 0) * 100) / 100,
-    familiesWithBalance: [...byFamily.entries()]
-      .map(([fid, e]) => ({ family: s.families.find((f) => f.id === fid)!.name, href: familyHref(fid), due: Math.round(e.due * 100) / 100, for: e.items }))
-      .sort((a, b) => b.due - a.due),
-    byTerm,
   }
 }
 
@@ -677,7 +654,8 @@ export function practiceTodayInfo(ctx: Ctx) {
 export function progressInfo(ctx: Ctx, q: { program?: string; sailor?: string }) {
   const { s } = ctx
   const programs = matchPrograms(q.program)
-  const sessions = s.sessions.filter((x) => x.termId === 'fall-26' && (!programs.length || programs.includes(x.programId)))
+  const today = format(ctx.now, 'yyyy-MM-dd')
+  const sessions = s.sessions.filter((x) => x.startDate <= today && x.endDate >= today && (!programs.length || programs.includes(x.programId)))
   const rows = sessions.flatMap((se) =>
     s.registrations
       .filter((r) => r.sessionId === se.id && r.status === 'confirmed')
@@ -697,12 +675,66 @@ export function progressInfo(ctx: Ctx, q: { program?: string; sailor?: string })
           skills: `${got.length} of ${list.length}`,
           readyToMoveUp: got.length === list.length,
           workingOn: working.map((x) => x.name),
-          evaluation: ev ? (ev.shared ? `shared ${d(ev.date)}` : 'draft') : 'not written',
+          evaluation: ev ? (ev.status === 'shared' ? `shared ${d(ev.date)}` : ev.status === 'pending' ? 'waiting for director approval' : 'draft') : 'not written',
           evaluationText: q.sailor && ev ? { strengths: ev.strengths, workOn: ev.workOn, nextStep: ev.nextStep } : undefined,
         }
       })
   )
-  return { rows, progressPage: '/admin/progress' }
+  const pending = s.evaluations
+    .filter((e) => e.status === 'pending')
+    .map((e) => {
+      const k = s.sailors.find((x) => x.id === e.sailorId)
+      return { sailor: k ? `${k.firstName} ${k.lastName}` : '', coach: s.coaches.find((c) => c.id === e.coachId)?.name, written: d(e.date) }
+    })
+  return { rows, waitingForApproval: pending, progressPage: '/admin/progress' }
+}
+
+/** Conversations: what's waiting on the director, and recent threads (optionally matching a search). */
+export function inboxInfo(ctx: Ctx, q: { search?: string }) {
+  const { s } = ctx
+  const name = (p: string) => {
+    if (p === 'director') return 'Jordan Hale (director)'
+    const [kind, id] = p.split(':')
+    if (kind === 'coach') return s.coaches.find((c) => c.id === id)?.name ?? 'coach'
+    if (kind === 'family') return `${s.families.find((f) => f.id === id)?.name} family`
+    if (kind === 'sailor') {
+      const k = s.sailors.find((x) => x.id === id)
+      return k ? `${k.firstName} ${k.lastName} (sailor)` : 'sailor'
+    }
+    return p
+  }
+  const needle = q.search?.toLowerCase()
+  const rows = s.threads
+    .filter((t) => !needle || `${t.subject} ${t.messages.map((m) => `${m.name} ${m.text}`).join(' ')}`.toLowerCase().includes(needle))
+    .map((t) => {
+      const last = t.messages[t.messages.length - 1]
+      const unread = t.participants.includes('director') && last.from !== 'director' && (!t.reads.director || t.reads.director < last.at)
+      return { subject: t.subject, with: t.participants.map(name), lastFrom: last.name, lastMessage: last.text, at: last.at.slice(0, 16).replace('T', ' '), waitingForDirector: unread, directorIsIn: t.participants.includes('director') }
+    })
+    .sort((a, b) => b.at.localeCompare(a.at))
+  return { waitingForYou: rows.filter((r) => r.waitingForDirector).length, rows: rows.slice(0, 20), inboxPage: '/admin/inbox' }
+}
+
+/** What parents told the coaches about a day: out, late, leaving early, someone else picking up. */
+export function parentNotesInfo(ctx: Ctx, q: { date?: string }) {
+  const { s } = ctx
+  const today = format(ctx.now, 'yyyy-MM-dd')
+  const date = q.date && /^\d{4}-\d{2}-\d{2}$/.test(q.date) ? q.date : today
+  const rows = s.dayNotes
+    .filter((n) => (q.date === 'upcoming' ? n.date >= today : n.date === date))
+    .map((n) => {
+      const k = s.sailors.find((x) => x.id === n.sailorId)
+      const group = s.groups.find((g) => g.sailorIds.includes(n.sailorId) && s.sessions.some((x) => x.id === g.sessionId && x.startDate <= n.date && x.endDate >= n.date))
+      return {
+        date: d(n.date),
+        sailor: k ? `${k.firstName} ${k.lastName}` : '',
+        what: n.kind === 'absent' ? 'out' : n.kind === 'late' ? `late${n.detail ? `, about ${n.detail}` : ''}` : n.kind === 'early' ? `leaving at ${n.detail}` : `picked up by ${n.detail}`,
+        note: n.note,
+        toldBy: n.by,
+        coach: group?.coachIds.map((c) => s.coaches.find((x) => x.id === c)?.name).join(', '),
+      }
+    })
+  return { date: q.date === 'upcoming' ? 'today and later' : d(date), rows, attendancePage: '/admin/attendance' }
 }
 
 /** Live "needs attention" list — the same items the Today page shows. */
@@ -711,18 +743,20 @@ export function briefing(ctx: Ctx) {
     (r) => `${r.staff}: ${r.cert} ${r.status === 'expiring' ? `expires in ${r.daysLeft} days` : r.status}`
   )
   const roster = rostersInfo(ctx, { problemsOnly: true }).groups.map((g) => `${g.group} (${g.session}): ${g.problem}`)
-  const offers = ctx.s.registrations.filter((r) => r.status === 'offered').length
-  const money = moneyInfo(ctx)
   const forms = formsInfo(ctx, {})
-  const full = sessionsInfo(ctx, { term: 'summer-27', filter: 'full' }).rows.map((r) => `${r.session} (${r.waitlist} waiting)`)
+  const inbox = inboxInfo(ctx, {})
+  const notes = parentNotesInfo(ctx, {})
+  const pending = ctx.s.evaluations.filter((e) => e.status === 'pending').length
+  const today = format(ctx.now, 'yyyy-MM-dd')
+  const term = TERMS.find((t) => t.startDate <= today && t.endDate >= today)
   return [
-    `Today is ${format(ctx.now, 'EEEE, MMMM d, yyyy')}. Fall 2026 teams are in progress; Spring 2027 and Summer 2027 registration is open.`,
+    `Today is ${format(ctx.now, 'EEEE, MMMM d, yyyy, h:mm a')}.${term ? ` ${term.name} is running; summer camps have morning (AM) and afternoon (PM) groups.` : ''} Registration and payments happen in the club's own registration system; Burgee imports the rosters.`,
     `Staff certification issues: ${certs.join('; ') || 'none'}.`,
     `Roster problems: ${roster.join('; ') || 'none'}.`,
-    `Waitlist offers waiting on families: ${offers}.`,
-    `Unpaid balances: $${money.totalOutstanding.toLocaleString()} across ${money.familiesWithBalance.length} families.`,
+    `Messages waiting for the director: ${inbox.waitingForYou}.`,
+    `Parent notes for today: ${notes.rows.map((n) => `${n.sailor} ${n.what}`).join('; ') || 'none'}.`,
+    `Evaluations waiting for approval: ${pending}.`,
     `Forms: ${forms.sailorsMissing} of ${forms.activeSailors} registered sailors are missing at least one ${forms.season} form.`,
-    `Full summer weeks: ${full.join('; ') || 'none'}.`,
   ].join('\n')
 }
 

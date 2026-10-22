@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Main } from '@/components/layout/main'
 import { CertStatusLabel, Initials, PageHeader } from '@/components/burgee/marks'
+import { now as clockNow } from '@/lib/clock'
 
 const SHORT: Record<string, string> = {
   l1: 'Level 1',
@@ -349,7 +350,7 @@ function UploadDialog({
   const addDocument = useStore((s) => s.addDocument)
   const [coachId, setCoachId] = useState('')
   const [certTypeId, setCertTypeId] = useState('')
-  const [issued, setIssued] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [issued, setIssued] = useState(format(clockNow(), 'yyyy-MM-dd'))
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')

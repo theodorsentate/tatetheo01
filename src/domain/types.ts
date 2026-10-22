@@ -57,6 +57,10 @@ export type Program = {
   color: string
   /** Form template ids required before a sailor can participate. */
   requiredFormIds: ID[]
+  /** Summer camps run as morning or afternoon groups. */
+  slot?: 'AM' | 'PM'
+  /** Who writes lesson plans: the head coach for every group, or each coach for their own. */
+  planOwner?: 'head-coach' | 'each-coach'
 }
 
 export type Session = {
@@ -108,6 +112,21 @@ export type Sailor = {
   parentNote?: { text: string; updatedAt: ISODateTime; by: string }
   /** People other than guardians allowed to pick this sailor up. */
   authorizedPickups?: string[]
+  /** Older sailors can have their own login. Every message to them copies a parent. */
+  login?: { email: string; phone?: string }
+}
+
+/** Something a parent tells the coaches about one day: out, late, leaving early, or someone else picking up. */
+export type DayNote = {
+  id: ID
+  sailorId: ID
+  date: ISODate
+  kind: 'absent' | 'late' | 'early' | 'pickup'
+  /** For 'pickup': who is coming. For 'early': what time. */
+  detail?: string
+  note?: string
+  by: string
+  at: ISODateTime
 }
 
 /* ───────────── Attendance & safety ───────────── */
@@ -290,6 +309,8 @@ export type LessonBlock = { minutes: number; title: string; detail?: string }
 export type LessonPlan = {
   id: ID
   sessionId: ID
+  /** Set when each coach plans for their own group; empty when the head coach plans for everyone. */
+  groupId?: ID
   date: ISODate
   title: string
   focus: string
@@ -315,7 +336,8 @@ export type SkillTrack = 'lts' | 'green' | 'champ' | 'c420' | 'ilca'
 export type Skill = {
   id: ID
   track: SkillTrack
-  area: 'Safety' | 'Boat handling' | 'Racing' | 'Rules' | 'Rigging'
+  /** Organized like US Sailing Skill Up: Safety, Sailing skills, Theory and Knots, plus Racing for race fleets. */
+  area: 'Safety' | 'Sailing skills' | 'Theory' | 'Knots' | 'Racing'
   name: string
   detail: string
 }
@@ -323,7 +345,8 @@ export type Skill = {
 export type SkillMark = {
   sailorId: ID
   skillId: ID
-  status: 'working' | 'got-it'
+  /** US Sailing's three steps: Introduced, In progress, Completed. */
+  status: 'introduced' | 'working' | 'got-it'
   date: ISODate
   by: string
 }
@@ -338,7 +361,10 @@ export type Evaluation = {
   strengths: string
   workOn: string
   nextStep: string
-  shared: boolean
+  /** Coaches write; the director approves before families see it. */
+  status: 'draft' | 'pending' | 'shared'
+  approvedBy?: string
+  approvedAt?: ISODateTime
 }
 
 /* ───────────── Safety ───────────── */
@@ -432,7 +458,39 @@ export type FormSubmission = {
   values: Record<string, string>
 }
 
-export type Channel = 'email' | 'sms'
+export type Channel = 'email' | 'sms' | 'push'
+
+/* ───────────── Conversations ───────────── */
+
+/**
+ * Who is in a conversation: 'director', 'coach:<id>', 'family:<id>' or 'sailor:<id>'.
+ * A sailor is never in a conversation without their family (SafeSport: messages
+ * between adults and minors stay open, with a parent copied).
+ */
+export type Participant = string
+
+export type ThreadMessage = {
+  id: ID
+  from: Participant
+  /** Display name of the person who wrote it ("Sarah Calloway", "Maya Ortiz"). */
+  name: string
+  text: string
+  at: ISODateTime
+}
+
+export type Thread = {
+  id: ID
+  subject: string
+  participants: Participant[]
+  /** The family the conversation is about (always set for family and sailor threads). */
+  familyId?: ID
+  sailorId?: ID
+  /** Set when the thread started as a reply to an announcement. */
+  announcementId?: ID
+  messages: ThreadMessage[]
+  /** Last time each participant opened it. */
+  reads: Record<Participant, ISODateTime>
+}
 
 export type Audience =
   | { kind: 'everyone' }
@@ -449,6 +507,8 @@ export type Announcement = {
   id: ID
   title: string
   body: string
+  /** Urgent messages also go out by text; everything else is an app notification and email. */
+  urgent?: boolean
   category: 'general' | 'weather' | 'schedule' | 'reminder'
   audience: Audience
   channels: Channel[]
@@ -493,6 +553,8 @@ export type ClubSettings = {
   pricing: PricingSettings
   waitlist: WaitlistSettings
   certWarningDays: number
+  /** Shown on every coach's emergency card. */
+  emergency: { address: string; vhf: string; hospital: string; harbormaster: string }
 }
 
 export type ActivityEvent = {

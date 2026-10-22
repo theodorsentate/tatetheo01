@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { differenceInCalendarDays, differenceInHours, format } from 'date-fns'
+import { addDays, differenceInCalendarDays, format } from 'date-fns'
 import {
   type AlertTriangle,
   Anchor,
-  Banknote,
   ClipboardCheck,
-  Clock,
+  GraduationCap,
+  MessageCircle,
+  MessagesSquare,
   ShieldAlert,
   TriangleAlert,
   Trophy,
@@ -15,9 +16,9 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { CERT_TYPES, FORM_TEMPLATES, PERSONAS, TERMS } from '@/data/catalog'
-import { programById, useLookups, useNow, useSessionStats } from '@/data/hooks'
+import { programById, useLookups, useNow } from '@/data/hooks'
 import { useStore } from '@/data/store'
-import { ACTIVE_STATUSES, money } from '@/domain/pricing'
+import { ACTIVE_STATUSES } from '@/domain/pricing'
 import { coachCertRows, groupLoad, outstandingForms } from '@/domain/rules'
 import { Button } from '@/components/ui/button'
 import { Main } from '@/components/layout/main'
@@ -26,9 +27,13 @@ import { dayCounts } from '@/domain/attendance'
 import type { Session } from '@/domain/types'
 import { CALL, type CallStatus, Pennant, PracticeCallDialog, sessionsOn } from '@/components/burgee/practice'
 import { KIND } from './calendar'
+import { isUnread } from '@/features/inbox/inbox'
+import { dayNoteText } from '@/features/family/home'
 
+type When = 'today' | 'week' | 'later'
 type Attention = {
   id: string
+  when: When
   tone: 'danger' | 'signal' | 'neutral'
   icon: typeof AlertTriangle
   title: string
@@ -51,33 +56,86 @@ export function AdminDashboard() {
   const calendar = useStore((s) => s.calendar)
   const regattas = useStore((s) => s.regattas)
   const regattaResponses = useStore((s) => s.regattaResponses)
-  const [showAll, setShowAll] = useState(false)
-  const stats = useSessionStats()
+  const threads = useStore((s) => s.threads)
+  const dayNotes = useStore((s) => s.dayNotes)
+  const evaluations = useStore((s) => s.evaluations)
+  const attendance = useStore((s) => s.attendance)
+  const [showLater, setShowLater] = useState(false)
   const look = useLookups()
 
-  const fall = TERMS[0]
-  const fallWeek = Math.min(
-    11,
-    Math.max(1, Math.ceil((differenceInCalendarDays(now, new Date(`${fall.startDate}T12:00:00`)) + 1) / 7))
-  )
-  const summer = TERMS[2]
+  const today = format(now, 'yyyy-MM-dd')
+  const term = TERMS.find((t) => t.startDate <= today && t.endDate >= today)
+  const weekNo = term ? Math.floor(differenceInCalendarDays(now, new Date(`${term.startDate}T12:00:00`)) / 7) + 1 : 0
+  const weeksIn = term ? Math.ceil((differenceInCalendarDays(new Date(`${term.endDate}T12:00:00`), new Date(`${term.startDate}T12:00:00`)) + 1) / 7) : 0
+  const todays = sessionsOn(sessions, now)
+  const thisWeek = sessions.filter((s) => s.startDate <= today && s.endDate >= today)
 
   const attention = useMemo<Attention[]>(() => {
     const items: Attention[] = []
+    const todayIds = new Set(sessionsOn(sessions, now).map((s) => s.id))
+    const nextWeekStart = format(addDays(now, 7 - ((now.getDay() + 6) % 7)), 'yyyy-MM-dd')
+    const nextWeekEnd = format(addDays(new Date(`${nextWeekStart}T12:00:00`), 6), 'yyyy-MM-dd')
+    const coachesToday = new Set(groups.filter((g) => todayIds.has(g.sessionId)).flatMap((g) => g.coachIds))
 
-    // Coach coverage on grouped sessions
+    // Messages waiting on the director
+    const unread = threads.filter((t) => t.participants.includes('director') && isUnread(t, 'director'))
+    if (unread.length)
+      items.push({
+        id: 'inbox',
+        when: 'today',
+        tone: 'signal',
+        icon: MessagesSquare,
+        title: `${unread.length} message${unread.length === 1 ? '' : 's'} waiting for you`,
+        detail: unread
+          .slice(0, 2)
+          .map((t) => `${t.messages[t.messages.length - 1].name.split(' ')[0]}: ${t.subject}`)
+          .join(' · '),
+        action: (
+          <Button asChild size='sm' variant='outline'>
+            <Link to='/admin/inbox'>Open inbox</Link>
+          </Button>
+        ),
+      })
+
+    // Parent notes for today (the coaches already see them on their rosters)
+    const notes = dayNotes.filter((d) => d.date === today)
+    if (notes.length)
+      items.push({
+        id: 'notes',
+        when: 'today',
+        tone: 'neutral',
+        icon: MessageCircle,
+        title: `${notes.length} parent note${notes.length === 1 ? '' : 's'} for today`,
+        detail: notes
+          .map((d) => {
+            const k = look.sailor.get(d.sailorId)
+            return k ? dayNoteText(d, k) : ''
+          })
+          .join('. '),
+        action: (
+          <Button asChild size='sm' variant='outline'>
+            <Link to='/admin/attendance'>Attendance</Link>
+          </Button>
+        ),
+      })
+
+    // Coach coverage: today and next week
     for (const g of groups) {
       const session = look.session.get(g.sessionId)
       if (!session) continue
+      const isToday = todayIds.has(session.id)
+      const isNextWeek = session.startDate >= nextWeekStart && session.startDate <= nextWeekEnd
+      if (!isToday && !isNextWeek) continue
       const program = programById.get(session.programId)!
       const load = groupLoad(g, program.ratio)
       if (load.noCoach || load.overRatio) {
         items.push({
           id: `g-${g.id}`,
-          tone: 'danger',
+          when: isToday ? 'today' : 'week',
+          tone: isToday ? 'danger' : 'signal',
           icon: UserRoundX,
-          title: `${g.name} has ${load.noCoach ? 'no coach' : `${load.sailors} sailors for ${g.coachIds.length} coach`}`,
-          detail: `${program.name} · ${session.name}. Ratio is 1:${program.ratio}.`,
+          title: `${g.name}${isToday ? '' : ' next week'} has ${load.noCoach ? 'no coach' : `${load.sailors} sailors for ${g.coachIds.length} coach`}`,
+          detail: `${program.name}, ${session.name}. Ratio is 1:${program.ratio}.`,
           action: (
             <Button asChild size='sm' variant='outline'>
               <Link to='/admin/sessions/$sessionId' params={{ sessionId: session.id }}>
@@ -89,106 +147,101 @@ export function AdminDashboard() {
       }
     }
 
-    // Certifications
+    // Certifications: urgent for anyone coaching today, later for everyone else
     for (const c of coaches) {
       const rows = coachCertRows(c, CERT_TYPES, now, settings.certWarningDays).filter((r) => r.status !== 'valid')
-      if (rows.length > 2) {
-        // A brand-new hire missing everything gets one line, not six.
-        const names = (st: string) => rows.filter((r) => r.status === st).map((r) => r.certType.name)
-        const parts = [
-          names('missing').length && `Missing: ${names('missing').join(', ')}.`,
-          names('expired').length && `Expired: ${names('expired').join(', ')}.`,
-          names('expiring').length && `Expiring soon: ${names('expiring').join(', ')}.`,
-        ].filter(Boolean)
-        items.push({
-          id: `c-${c.id}`,
-          tone: rows.some((r) => r.status !== 'expiring') ? 'danger' : 'signal',
-          icon: ShieldAlert,
-          title: `${c.name} needs ${rows.length} certifications`,
-          detail: parts.join(' '),
-          action: (
-            <Button asChild size='sm' variant='outline'>
-              <Link to='/admin/documents' search={{ person: c.id }}>
-                View files
-              </Link>
-            </Button>
-          ),
-        })
-        continue
-      }
-      for (const row of rows) {
-        items.push({
-          id: `c-${c.id}-${row.certType.id}`,
-          tone: row.status === 'expiring' ? 'signal' : 'danger',
-          icon: ShieldAlert,
-          title:
-            row.status === 'expiring'
-              ? `${c.name}'s ${row.certType.name} expires in ${row.daysLeft} days`
-              : row.status === 'expired'
-                ? `${c.name}'s ${row.certType.name} expired`
-                : `${c.name} has no ${row.certType.name} on file`,
-          detail: row.status === 'expiring' ? `Expires ${format(new Date(`${row.expires}T12:00:00`), 'MMM d')}.` : 'Keep them off the water until it is on file.',
-          action: (
-            <Button asChild size='sm' variant='outline'>
-              <Link to='/admin/staff'>View staff</Link>
-            </Button>
-          ),
-        })
-      }
+      if (!rows.length) continue
+      const blocking = rows.filter((r) => r.status !== 'expiring')
+      const onWater = coachesToday.has(c.id)
+      const when: When = blocking.length ? (onWater ? 'today' : 'week') : 'later'
+      const names = (st: string) => rows.filter((r) => r.status === st).map((r) => r.certType.name)
+      items.push({
+        id: `c-${c.id}`,
+        when,
+        tone: blocking.length ? 'danger' : 'signal',
+        icon: ShieldAlert,
+        title:
+          rows.length === 1
+            ? rows[0].status === 'expiring'
+              ? `${c.name}'s ${rows[0].certType.name} expires in ${rows[0].daysLeft} days`
+              : rows[0].status === 'expired'
+                ? `${c.name}'s ${rows[0].certType.name} expired`
+                : `${c.name} has no ${rows[0].certType.name} on file`
+            : `${c.name} needs ${rows.length} certifications`,
+        detail:
+          rows.length === 1 && rows[0].status === 'expiring'
+            ? `Expires ${format(new Date(`${rows[0].expires}T12:00:00`), 'MMM d')}.`
+            : [
+                names('missing').length && `Missing: ${names('missing').join(', ')}.`,
+                names('expired').length && `Expired: ${names('expired').join(', ')}.`,
+                names('expiring').length && `Expiring soon: ${names('expiring').join(', ')}.`,
+                onWater && blocking.length ? `${c.name.split(' ')[0]} is coaching today.` : '',
+              ]
+                .filter(Boolean)
+                .join(' '),
+        action: (
+          <Button asChild size='sm' variant='outline'>
+            <Link to='/admin/documents' search={{ person: c.id }}>
+              View files
+            </Link>
+          </Button>
+        ),
+      })
     }
 
-    // Offers expiring soon
-    const offers = regs.filter((r) => r.status === 'offered' && r.offerExpiresAt)
-    if (offers.length) {
-      const soonest = offers.sort((a, b) => a.offerExpiresAt!.localeCompare(b.offerExpiresAt!))[0]
+    // Open incident reports
+    const openInc = incidents.filter((i) => i.status === 'open')
+    if (openInc.length)
       items.push({
-        id: 'offers',
+        id: 'incidents',
+        when: 'today',
+        tone: openInc.some((i) => i.severity === 'serious') ? 'danger' : 'neutral',
+        icon: TriangleAlert,
+        title: `${openInc.length} incident report${openInc.length > 1 ? 's' : ''} to review`,
+        detail: openInc
+          .map((i) => `${i.reportedBy.split(' ')[0]}: ${i.description}`)
+          .slice(0, 2)
+          .join(' '),
+        action: (
+          <Button asChild size='sm' variant='outline'>
+            <Link to='/admin/incidents'>Review</Link>
+          </Button>
+        ),
+      })
+
+    // Evaluations the coaches sent for approval
+    const pendingEvals = evaluations.filter((e) => e.status === 'pending')
+    if (pendingEvals.length)
+      items.push({
+        id: 'evals',
+        when: 'week',
         tone: 'signal',
-        icon: Clock,
-        title: `${offers.length} waitlist offer${offers.length > 1 ? 's' : ''} waiting on families`,
-        detail: `Next hold ends in ${Math.max(0, differenceInHours(new Date(soonest.offerExpiresAt!), now))}h. Unclaimed spots roll to the next family automatically.`,
+        icon: GraduationCap,
+        title: `${pendingEvals.length} evaluation${pendingEvals.length === 1 ? '' : 's'} waiting for your approval`,
+        detail: `From ${[...new Set(pendingEvals.map((e) => look.coach.get(e.coachId)?.name.split(' ')[0]))].join(', ')}. Families see them once you approve.`,
         action: (
           <Button asChild size='sm' variant='outline'>
-            <Link to='/admin/registrations' search={{ status: 'offered' }}>
-              See offers
-            </Link>
+            <Link to='/admin/progress'>Review</Link>
           </Button>
         ),
       })
-    }
 
-    // Balances
-    const due = regs.filter((r) => r.status === 'pending-payment')
-    if (due.length) {
-      items.push({
-        id: 'due',
-        tone: 'neutral',
-        icon: Banknote,
-        title: `${money(due.reduce((s, r) => s + r.price - r.paid, 0))} in unpaid balances`,
-        detail: `${due.length} registrations are holding seats without payment.`,
-        action: (
-          <Button asChild size='sm' variant='outline'>
-            <Link to='/admin/registrations' search={{ status: 'pending-payment' }}>
-              Review
-            </Link>
-          </Button>
-        ),
-      })
-    }
-
-    // Forms
-    const active = new Set(regs.filter((r) => ACTIVE_STATUSES.has(r.status)).map((r) => r.sailorId))
-    const missing = sailors.filter(
-      (s) => active.has(s.id) && outstandingForms(s, FORM_TEMPLATES, submissions, settings.season).length
-    )
+    // Forms for sailors here this week
+    const weekIds = new Set(sessions.filter((s) => s.startDate <= today && s.endDate >= today).map((s) => s.id))
+    const here = new Set(regs.filter((r) => weekIds.has(r.sessionId) && ACTIVE_STATUSES.has(r.status)).map((r) => r.sailorId))
+    const missing = sailors.filter((s) => here.has(s.id) && outstandingForms(s, FORM_TEMPLATES, submissions, settings.season).length)
     if (missing.length) {
       const fams = [...new Set(missing.map((s) => s.familyId))]
       items.push({
         id: 'forms',
+        when: 'week',
         tone: 'neutral',
         icon: ClipboardCheck,
-        title: `${missing.length} sailors are missing ${settings.season} forms`,
-        detail: `Across ${fams.length} families. Coaches see a flag on the roster until forms are in.`,
+        title: `${missing.length} sailor${missing.length === 1 ? '' : 's'} here this week ${missing.length === 1 ? 'is' : 'are'} missing forms`,
+        detail: `${missing
+          .slice(0, 4)
+          .map((k) => k.firstName)
+          .join(', ')}${missing.length > 4 ? ` and ${missing.length - 4} more` : ''}. Coaches see a flag on the roster.`,
         action: (
           <Button
             size='sm'
@@ -204,39 +257,6 @@ export function AdminDashboard() {
       })
     }
 
-    // Equipment and open incident reports
-    const down = boats.filter((b) => b.status !== 'ready')
-    if (down.length) {
-      const out = down.filter((b) => b.status === 'out-of-service')
-      items.push({
-        id: 'boats',
-        tone: out.some((b) => b.kind === 'RIB' || b.kind === 'Whaler') ? 'danger' : 'signal',
-        icon: Anchor,
-        title: `${down.length} boats need work${out.length ? `, ${out.length} out of service` : ''}`,
-        detail: down.slice(0, 3).map((b) => `${b.name}: ${b.issue ?? 'needs attention'}`).join('. '),
-        action: (
-          <Button asChild size='sm' variant='outline'>
-            <Link to='/admin/equipment'>Open fleet</Link>
-          </Button>
-        ),
-      })
-    }
-    const openInc = incidents.filter((i) => i.status === 'open')
-    if (openInc.length) {
-      items.push({
-        id: 'incidents',
-        tone: openInc.some((i) => i.severity === 'serious') ? 'danger' : 'neutral',
-        icon: TriangleAlert,
-        title: `${openInc.length} incident report${openInc.length > 1 ? 's' : ''} to review`,
-        detail: openInc.map((i) => `${i.reportedBy.split(' ')[0]}: ${i.description}`).slice(0, 2).join(' '),
-        action: (
-          <Button asChild size='sm' variant='outline'>
-            <Link to='/admin/incidents'>Review</Link>
-          </Button>
-        ),
-      })
-    }
-
     // Regatta entries closing within a week
     for (const r of regattas) {
       const ev = calendar.find((e) => e.id === r.eventId)
@@ -247,6 +267,7 @@ export function AdminDashboard() {
       const chaps = regattaResponses.filter((x) => x.eventId === r.eventId && x.chaperone).length
       items.push({
         id: `reg-${r.eventId}`,
+        when: 'week',
         tone: 'signal',
         icon: Trophy,
         title: `${ev.title}: enter ${going} sailor${going === 1 ? '' : 's'} by ${format(new Date(`${r.entryDeadline}T12:00:00`), 'EEE, MMM d')}`,
@@ -261,35 +282,61 @@ export function AdminDashboard() {
       })
     }
 
+    // Boats: a coach boat out of service matters today; the rest can wait
+    const down = boats.filter((b) => b.status !== 'ready')
+    if (down.length) {
+      const coachBoatOut = down.some((b) => (b.kind === 'RIB' || b.kind === 'Whaler') && b.status === 'out-of-service')
+      items.push({
+        id: 'boats',
+        when: coachBoatOut ? 'today' : 'later',
+        tone: coachBoatOut ? 'danger' : 'neutral',
+        icon: Anchor,
+        title: `${down.length} boats need work`,
+        detail: down
+          .slice(0, 3)
+          .map((b) => `${b.name}: ${b.issue ?? 'needs attention'}`)
+          .join('. '),
+        action: (
+          <Button asChild size='sm' variant='outline'>
+            <Link to='/admin/equipment'>Open fleet</Link>
+          </Button>
+        ),
+      })
+    }
+
     const order = { danger: 0, signal: 1, neutral: 2 }
     return items.sort((a, b) => order[a.tone] - order[b.tone])
-  }, [groups, look, coaches, now, settings, regs, sailors, submissions, sendFormReminders, boats, incidents, regattas, calendar, regattaResponses])
+  }, [groups, look, coaches, now, today, settings, regs, sailors, sessions, submissions, sendFormReminders, boats, incidents, regattas, calendar, regattaResponses, threads, dayNotes, evaluations])
 
-  const numbers = useMemo(() => {
-    const summerSessions = sessions.filter((s) => s.termId === 'summer-27')
-    const cap = summerSessions.reduce((s, x) => s + x.capacity, 0)
-    const taken = summerSessions.reduce((s, x) => s + (stats.get(x.id)?.taken ?? 0), 0)
-    const waitlist = summerSessions.reduce((s, x) => s + (stats.get(x.id)?.waitlist ?? 0), 0)
-    const summerIds = new Set(summerSessions.map((s) => s.id))
-    const live = regs.filter((r) => ACTIVE_STATUSES.has(r.status))
-    const fams = new Set(live.filter((r) => summerIds.has(r.sessionId)).map((r) => look.sailor.get(r.sailorId)?.familyId))
-    return { cap, taken, waitlist, families: fams.size }
-  }, [sessions, stats, regs, look])
+  const week = useMemo(() => {
+    const ids = new Set(thisWeek.map((s) => s.id))
+    const kids = new Set(regs.filter((r) => ids.has(r.sessionId) && r.status === 'confirmed').map((r) => r.sailorId))
+    const todayIds = new Set(todays.map((s) => s.id))
+    const expected = regs.filter((r) => todayIds.has(r.sessionId) && r.status === 'confirmed').length
+    const entries = Object.values(attendance).filter((e) => e.date === today && todayIds.has(e.sessionId))
+    const here = entries.filter((e) => e.status !== 'absent').length
+    const out = entries.filter((e) => e.status === 'absent').length
+    const shared = evaluations.filter((e) => e.status === 'shared').length
+    return { kids: kids.size, expected, here, out, shared }
+  }, [thisWeek, todays, regs, attendance, today, evaluations])
 
-  const today = format(now, 'yyyy-MM-dd')
-  const todays = sessionsOn(sessions, now)
   const upcoming = calendar
     .filter((e) => (e.endDate ?? e.date) >= today)
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 5)
-  const membersOnly = summer.memberPriorityUntil && now < new Date(`${summer.memberPriorityUntil}T00:00:00`)
   const hour = now.getHours()
+  const buckets: { id: When; label: string }[] = [
+    { id: 'today', label: 'Today' },
+    { id: 'week', label: 'This week' },
+    { id: 'later', label: 'Later' },
+  ]
 
   return (
     <Main>
       <div className='mb-8'>
         <p className='text-sm text-muted-foreground'>
-          {format(now, 'EEEE, MMMM d')} · Fall week {fallWeek} of 11
+          {format(now, 'EEEE, MMMM d')}
+          {term && ` · ${term.season === 'summer' ? 'Camp' : term.name} week ${weekNo} of ${weeksIn}`}
         </p>
         <h1 className='mt-1 text-3xl font-semibold'>
           Good {hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}, {PERSONAS.director.name.split(' ')[0]}
@@ -306,44 +353,74 @@ export function AdminDashboard() {
           <section aria-labelledby='attention'>
             <h2 id='attention' className='mb-3 text-lg font-semibold'>
               Needs you
-              {attention.length > 0 && <span className='ms-2 text-sm font-normal text-muted-foreground'>{attention.length}</span>}
             </h2>
-            <ul className='divide-y rounded-xl border bg-card'>
-              {(showAll ? attention : attention.slice(0, 5)).map((a) => (
-                <li key={a.id} className='flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3'>
-                  <a.icon
-                    className={cn(
-                      'size-5 shrink-0',
-                      a.tone === 'danger' && 'text-destructive',
-                      a.tone === 'signal' && 'text-signal',
-                      a.tone === 'neutral' && 'text-muted-foreground'
+            <div className='space-y-4'>
+              {buckets.map((b) => {
+                const list = attention.filter((a) => a.when === b.id)
+                if (b.id === 'later' && list.length === 0) return null
+                const collapsed = b.id === 'later' && !showLater
+                return (
+                  <div key={b.id}>
+                    <div className='mb-1.5 flex items-baseline gap-2'>
+                      <h3 className='text-sm font-semibold text-muted-foreground'>{b.label}</h3>
+                      <span className='text-xs text-muted-foreground'>{list.length || ''}</span>
+                      {b.id === 'later' && (
+                        <button className='ms-auto text-xs font-medium text-heading hover:underline' onClick={() => setShowLater(!showLater)}>
+                          {showLater ? 'Hide' : 'Show'}
+                        </button>
+                      )}
+                    </div>
+                    {!collapsed && (
+                      <ul className='divide-y rounded-xl border bg-card'>
+                        {list.map((a) => (
+                          <li key={a.id} className='flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3'>
+                            <a.icon
+                              className={cn(
+                                'size-5 shrink-0',
+                                a.tone === 'danger' && 'text-destructive',
+                                a.tone === 'signal' && 'text-signal',
+                                a.tone === 'neutral' && 'text-muted-foreground'
+                              )}
+                              aria-hidden='true'
+                            />
+                            <div className='min-w-0 flex-1 basis-56'>
+                              <p className='text-sm font-medium'>{a.title}</p>
+                              <p className='line-clamp-2 text-xs text-muted-foreground'>{a.detail}</p>
+                            </div>
+                            {a.action}
+                          </li>
+                        ))}
+                        {list.length === 0 && <li className='px-4 py-4 text-sm text-muted-foreground'>All clear.</li>}
+                      </ul>
                     )}
-                    aria-hidden='true'
-                  />
-                  <div className='min-w-0 flex-1'>
-                    <p className='text-sm font-medium'>{a.title}</p>
-                    <p className='text-xs text-muted-foreground'>{a.detail}</p>
                   </div>
-                  {a.action}
-                </li>
-              ))}
-              {attention.length > 5 && (
-                <li>
-                  <button className='w-full px-4 py-2.5 text-start text-sm font-medium text-heading hover:bg-muted/50' onClick={() => setShowAll(!showAll)}>
-                    {showAll ? 'Show fewer' : `Show all ${attention.length}`}
-                  </button>
-                </li>
-              )}
-              {attention.length === 0 && (
-                <li className='px-4 py-6 text-center text-sm text-muted-foreground'>
-                  Nothing needs you right now. Rosters are covered, forms are in and staff are current.
-                </li>
-              )}
-            </ul>
+                )
+              })}
+            </div>
           </section>
         </div>
 
         <aside className='space-y-8'>
+          <section aria-labelledby='at-a-glance'>
+            <h2 id='at-a-glance' className='mb-3 text-lg font-semibold'>
+              At a glance
+            </h2>
+            <dl className='grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border'>
+              {[
+                ['Sailors this week', week.kids, `${thisWeek.length} sessions`],
+                ['Here today', week.expected ? `${week.here}/${week.expected}` : '—', week.out ? `${week.out} out` : 'Nobody out'],
+                ['Parent notes today', dayNotes.filter((d) => d.date === today).length, 'Shown to coaches'],
+                ['Evaluations shared', week.shared, 'This summer'],
+              ].map(([label, value, sub]) => (
+                <div key={label as string} className='bg-card p-3.5'>
+                  <dt className='text-xs text-muted-foreground'>{label}</dt>
+                  <dd className='font-display text-2xl font-semibold text-heading'>{value}</dd>
+                  <dd className='text-xs text-muted-foreground'>{sub}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
           <section aria-labelledby='coming-up'>
             <div className='mb-3 flex items-baseline justify-between'>
               <h2 id='coming-up' className='text-lg font-semibold'>
@@ -380,39 +457,6 @@ export function AdminDashboard() {
                 )
               })}
             </ul>
-          </section>
-
-          <section aria-labelledby='summer'>
-            <div className='mb-3 flex items-baseline justify-between'>
-              <h2 id='summer' className='text-lg font-semibold'>
-                Summer 2027
-              </h2>
-              <Link to='/admin/programs' className='text-sm font-medium text-heading hover:underline'>
-                Programs
-              </Link>
-            </div>
-            <div className='rounded-xl border bg-card p-4'>
-              <p className='text-sm text-muted-foreground'>
-                {membersOnly ? `Members only until ${format(new Date(`${summer.memberPriorityUntil}T12:00:00`), 'MMMM d')}` : 'Open to everyone'}
-              </p>
-              <p className='mt-2 font-display text-2xl font-semibold text-heading'>
-                {numbers.taken}
-                <span className='text-base font-normal text-muted-foreground'> of {numbers.cap} seats</span>
-              </p>
-              <div className='mt-2 h-2 overflow-hidden rounded-full bg-muted' aria-hidden='true'>
-                <div className='h-full rounded-full bg-heading' style={{ width: `${Math.round((numbers.taken / numbers.cap) * 100)}%` }} />
-              </div>
-              <dl className='mt-3 grid grid-cols-2 gap-2 text-sm'>
-                <div>
-                  <dt className='text-muted-foreground'>Families</dt>
-                  <dd className='font-semibold'>{numbers.families}</dd>
-                </div>
-                <div>
-                  <dt className='text-muted-foreground'>Waitlisted</dt>
-                  <dd className='font-semibold'>{numbers.waitlist}</dd>
-                </div>
-              </dl>
-            </div>
           </section>
         </aside>
       </div>

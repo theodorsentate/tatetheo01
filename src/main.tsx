@@ -6,7 +6,6 @@ import {
   createHashHistory,
   createRouter,
 } from '@tanstack/react-router'
-import { useStore } from '@/data/store'
 import { ThemeProvider } from './context/theme-provider'
 import { routeTree } from './routeTree.gen'
 import './styles/index.css'
@@ -31,10 +30,6 @@ declare module '@tanstack/react-router' {
     router: typeof router
   }
 }
-
-// Waitlist engine: expire stale offers and fill open seats, now and every minute.
-useStore.getState().processWaitlists()
-setInterval(() => useStore.getState().processWaitlists(), 60_000)
 
 const rootElement = document.getElementById('root')!
 if (!rootElement.innerHTML) {

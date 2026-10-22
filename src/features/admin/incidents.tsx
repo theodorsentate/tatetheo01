@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Main } from '@/components/layout/main'
 import { EmptyState, PageHeader } from '@/components/burgee/marks'
+import { now as clockNow } from '@/lib/clock'
 
 export const INCIDENT_TYPE: Record<Incident['type'], string> = {
   'capsize-rescue': 'Capsize needing help',
@@ -141,7 +142,7 @@ export function AdminIncidents() {
                     <dd className={cn(!i.parentsNotified && kids.length > 0 && 'font-medium text-signal')}>
                       {i.parentsNotified ? i.notifiedHow ?? 'Yes' : kids.length ? 'Not yet' : 'Not needed'}
                       {!i.parentsNotified && kids.length > 0 && (
-                        <button className='ms-2 text-xs font-normal text-primary underline' onClick={() => update(i.id, { parentsNotified: true, notifiedHow: `Recorded ${format(new Date(), 'MMM d, h:mm a')}` })}>
+                        <button className='ms-2 text-xs font-normal text-primary underline' onClick={() => update(i.id, { parentsNotified: true, notifiedHow: `Recorded ${format(clockNow(), 'MMM d, h:mm a')}` })}>
                           Mark as told
                         </button>
                       )}

@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
+import { now, subscribeClock } from '@/lib/clock'
 import { ACTIVE_STATUSES } from '@/domain/pricing'
 import type { Program, Registration, Sailor, Session, Term } from '@/domain/types'
 import { seatsTaken, waitlistFor } from '@/domain/waitlist'
 import { PROGRAMS, TERMS } from './catalog'
 import { useStore } from './store'
 
-/** Current time, refreshed every 30s so countdowns stay live. */
+/** Current (demo) time, refreshed every 30s so countdowns stay live. */
 export function useNow(intervalMs = 30_000) {
-  const [now, setNow] = useState(() => new Date())
+  const [current, setCurrent] = useState(() => now())
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), intervalMs)
-    return () => clearInterval(t)
+    const t = setInterval(() => setCurrent(now()), intervalMs)
+    const off = subscribeClock(() => setCurrent(now()))
+    return () => {
+      clearInterval(t)
+      off()
+    }
   }, [intervalMs])
-  return now
+  return current
 }
 
 export const programById = new Map<string, Program>(PROGRAMS.map((p) => [p.id, p]))

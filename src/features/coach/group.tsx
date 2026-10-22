@@ -7,8 +7,9 @@ import {
   CheckCircle2,
   ChevronDown,
   ClipboardX,
-  CloudLightning,
   HeartPulse,
+  MessageCircle,
+  Siren,
   LifeBuoy,
   Megaphone,
   Phone,
@@ -34,7 +35,7 @@ import {
   STATUS_LABEL,
 } from '@/domain/attendance'
 import { ageOn, outstandingForms } from '@/domain/rules'
-import type { AttendanceEntry, AttendanceStatus, Sailor } from '@/domain/types'
+import type { AttendanceEntry, AttendanceStatus, DayNote, Sailor } from '@/domain/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -42,7 +43,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState, FleetChip } from '@/components/burgee/marks'
-import { CALL, Pennant, PracticeCallDialog } from '@/components/burgee/practice'
+import { CALL, Pennant } from '@/components/burgee/practice'
+import { dayNoteText } from '@/features/family/home'
+import { EmergencyCard } from './emergency-card'
 import { IncidentDialog } from '@/features/admin/incidents'
 import { BoatsTab, PlanTab, SkillsTab } from './practice-tabs'
 
@@ -74,9 +77,9 @@ export function CoachGroup({ groupId }: { groupId: string }) {
   const [swimFor, setSwimFor] = useState<{ sailor: Sailor; thenLaunch: boolean } | null>(null)
   const [reporting, setReporting] = useState(false)
   const [tab, setTab] = useState<'roster' | 'plan' | 'boats' | 'skills'>('roster')
-  const [calling, setCalling] = useState(false)
-  const role = useStore((s) => s.coaches.find((c) => c.id === PERSONAS.coachId)?.role)
+  const [emergency, setEmergency] = useState(false)
   const calls = useStore((s) => s.practiceCalls)
+  const dayNotes = useStore((s) => s.dayNotes)
 
   const group = groups.find((g) => g.id === groupId)
   const session = group ? look.session.get(group.sessionId) : undefined
@@ -106,6 +109,7 @@ export function CoachGroup({ groupId }: { groupId: string }) {
   const coaches = group.coachIds.map((id) => look.coach.get(id)?.name).filter(Boolean)
   const call = calls.find((c) => c.sessionId === session.id && c.date === today)
   const planDate = nextPractice(session, now) ?? today
+  const notesToday = (sid: string): DayNote[] => dayNotes.filter((d) => d.sailorId === sid && d.date === today)
 
   const launch = (ids: string[]) => {
     const ok = ids.filter(swimOk)
@@ -140,13 +144,8 @@ export function CoachGroup({ groupId }: { groupId: string }) {
             <Pennant status={call?.status ?? 'none'} className='h-5 w-7' />
             <span className='min-w-0 flex-1 text-sm'>
               <span className={cn('block font-semibold', call && CALL[call.status].text)}>{call ? CALL[call.status].sentence : 'No call yet today'}</span>
-              {call?.note && <span className='block truncate text-xs text-muted-foreground'>{call.note}</span>}
+              <span className='block truncate text-xs text-muted-foreground'>{call ? (call.note ?? `Called by ${call.by}`) : 'The director makes the call.'}</span>
             </span>
-            {(role === 'head-coach' || role === 'program-director') && (
-              <Button size='sm' variant='outline' className='bg-card' onClick={() => setCalling(true)}>
-                Change
-              </Button>
-            )}
           </div>
         )}
       </div>
@@ -213,8 +212,8 @@ export function CoachGroup({ groupId }: { groupId: string }) {
             <Button variant='outline' onClick={() => setCompose('message')}>
               <Megaphone className='size-4' /> Message parents
             </Button>
-            <Button variant='outline' onClick={() => setCalling(true)}>
-              <CloudLightning className='size-4' /> Weather call
+            <Button variant='outline' className='border-destructive/40 text-destructive hover:bg-danger-soft hover:text-destructive' onClick={() => setEmergency(true)}>
+              <Siren className='size-4' /> Emergency card
             </Button>
             <Button variant='ghost' className='col-span-2 text-muted-foreground' onClick={() => setReporting(true)}>
               <TriangleAlert className='size-4' /> Report an incident
@@ -256,14 +255,22 @@ export function CoachGroup({ groupId }: { groupId: string }) {
                       <HeartPulse className='size-4 shrink-0' /> {k.medicalAlerts.join(', ')}
                     </p>
                   )}
-                  {swim?.result !== 'passed' && (
-                    <p className='flex items-center gap-1.5 text-xs font-medium text-signal'>
-                      <LifeBuoy className='size-3.5 shrink-0' /> Swim check needed
+                  {notesToday(k.id).map((d) => (
+                    <p key={d.id} className='flex items-start gap-1.5 rounded-md bg-accent px-2 py-1 text-xs font-medium text-primary'>
+                      <MessageCircle className='mt-px size-3.5 shrink-0' />
+                      <span>
+                        {dayNoteText(d, k)} <span className='font-normal text-muted-foreground'>({d.by.split(' ')[0]}, {format(new Date(d.at), 'h:mm a')})</span>
+                      </span>
                     </p>
+                  ))}
+                  {swim?.result !== 'passed' && (
+                    <button onClick={() => setSwimFor({ sailor: k, thenLaunch: false })} className='flex items-center gap-1.5 text-xs font-medium text-signal underline-offset-2 hover:underline'>
+                      <LifeBuoy className='size-3.5 shrink-0' /> Swim check needed: tap to record it
+                    </button>
                   )}
                   {due.length > 0 && (
                     <p className='flex items-center gap-1.5 text-xs font-medium text-signal'>
-                      <ClipboardX className='size-3.5 shrink-0' /> Missing {due.map((d) => d.short.toLowerCase()).join(', ')}
+                      <ClipboardX className='size-3.5 shrink-0' /> Missing {due.map((d) => d.short.toLowerCase()).join(', ')}. The director is following up.
                     </p>
                   )}
                   {k.parentNote && (
@@ -306,15 +313,10 @@ export function CoachGroup({ groupId }: { groupId: string }) {
       </ul>
       )}
 
-      <PracticeCallDialog
-        open={calling}
-        onClose={() => setCalling(false)}
-        sessions={[session]}
-        initial={{ status: call?.status === 'cancelled' ? 'on' : 'cancelled', sessionIds: [session.id] }}
-        by={coachName}
-      />
+      <EmergencyCard open={emergency} onClose={() => setEmergency(false)} sailors={kids} groupName={`${group.name}, ${program.name}`} />
       <SignOutSheet
         sailor={signingOut}
+        expected={signingOut ? notesToday(signingOut.id).find((d) => d.kind === 'pickup')?.detail : undefined}
         onClose={() => setSigningOut(null)}
         onDone={(who, authorized) => {
           mark(today, session.id, [signingOut!.id], 'picked-up', { by: coachName, pickedUpBy: who })
@@ -533,18 +535,27 @@ function SailorDetails({
 
 function SignOutSheet({
   sailor,
+  expected,
   onClose,
   onDone,
 }: {
   sailor: Sailor | null
+  /** Who the parent said is picking up today. */
+  expected?: string
   onClose: () => void
   onDone: (who: string, authorized: boolean) => void
 }) {
   const look = useLookups()
   const [choice, setChoice] = useState('')
   const [other, setOther] = useState('')
+  const [primed, setPrimed] = useState<string | null>(null)
   const fam = sailor ? look.family.get(sailor.familyId) : undefined
   const allowed = sailor && fam ? [...fam.guardians.map((g) => `${g.name} (${g.relationship.toLowerCase()})`), ...(sailor.authorizedPickups ?? [])] : []
+  if (sailor && primed !== sailor.id) {
+    setPrimed(sailor.id)
+    setChoice(expected ? (allowed.find((p) => p.startsWith(expected.replace(/\s*\(.*\)$/, ''))) ?? '') : '')
+  }
+  if (!sailor && primed) setPrimed(null)
   return (
     <Sheet open={!!sailor} onOpenChange={(o) => { if (!o) { onClose(); setChoice(''); setOther('') } }}>
       <SheetContent side='bottom' className='rounded-t-2xl'>
@@ -552,7 +563,9 @@ function SignOutSheet({
           <>
             <SheetHeader>
               <SheetTitle>Who is {sailor.firstName} going home with?</SheetTitle>
-              <SheetDescription>Only people on the family’s list can sign a sailor out.</SheetDescription>
+              <SheetDescription>
+                {expected ? `The family said ${expected} is picking up today.` : 'Only people on the family’s list can sign a sailor out.'}
+              </SheetDescription>
             </SheetHeader>
             <div className='grid gap-3 px-4 pb-6'>
               <RadioGroup value={choice} onValueChange={setChoice}>

@@ -1,8 +1,8 @@
 import type { RegattaDetails, RegattaResponse, Registration, Sailor, Session } from './types'
 
 /**
- * Who a regatta is for: sailors on a current team whose fleet is racing.
- * `termId` is the term the regatta falls in.
+ * Who a regatta is for: sailors signed up that term (a team, or any camp week
+ * in summer) whose fleet is racing. `termId` is the term the regatta falls in.
  */
 export function eligibleSailors(
   regatta: Pick<RegattaDetails, 'levels'>,
@@ -11,9 +11,9 @@ export function eligibleSailors(
   sessions: Session[],
   termId: string
 ): Sailor[] {
-  const teamSessions = new Set(sessions.filter((s) => s.termId === termId && !/Week/.test(s.name)).map((s) => s.id))
-  const onTeam = new Set(registrations.filter((r) => r.status === 'confirmed' && teamSessions.has(r.sessionId)).map((r) => r.sailorId))
-  return sailors.filter((k) => onTeam.has(k.id) && regatta.levels.includes(k.level))
+  const termSessions = new Set(sessions.filter((s) => s.termId === termId).map((s) => s.id))
+  const signedUp = new Set(registrations.filter((r) => r.status === 'confirmed' && termSessions.has(r.sessionId)).map((r) => r.sailorId))
+  return sailors.filter((k) => signedUp.has(k.id) && regatta.levels.includes(k.level))
 }
 
 export type RegattaSummary = {

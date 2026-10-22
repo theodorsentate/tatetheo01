@@ -6,8 +6,8 @@
  * available (the offline demo file, local dev, or a viewer who declined),
  * so the feature always works in a pitch.
  */
+import { format } from 'date-fns'
 import { CERT_TYPES } from '@/data/catalog'
-import { money } from '@/domain/pricing'
 import {
   type AssistantAction,
   type Ctx,
@@ -29,7 +29,8 @@ import {
   matchPrograms,
   matchTerm,
   matchWeek,
-  moneyInfo,
+  inboxInfo,
+  parentNotesInfo,
   rostersInfo,
   sailorsInfo,
   sessionsInfo,
@@ -74,7 +75,7 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
         title: `${certId ? certName : 'Certification'} renewals due`,
         body: `Hi all, a quick admin note. ${[...new Set(res.rows.map((r) => r.staff.split(' ')[0]))].join(', ')}: your ${certId ? certName : 'certifications'} ${res.rows.length > 1 ? 'are' : 'is'} expired, missing, or expiring soon. Please renew and upload the card in Burgee (Certifications tab) before your next session so you stay on the roster. Thanks!`,
         audience: { kind: 'staff' },
-        channels: ['email', 'sms'],
+        channels: ['push', 'email'],
       })
     }
     actions.push({ kind: 'link', label: 'Open staff & certifications', href: '/admin/staff' })
@@ -98,6 +99,11 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
   }
 
   const famMentioned = ctx.s.families.find((f) => new RegExp(`\\b${f.name.toLowerCase()}s?\\b`).test(q))
+  // A calendar event named in the question ("the Harbor Island regatta", "parent night").
+  const GENERIC = new Set(['regatta', 'championship', 'junior', 'every', 'group', 'meeting', 'party', 'opti', 'fleet', 'green', 'coach', 'harbor', 'inner', 'slips'])
+  const eventWord = ctx.s.calendar
+    .flatMap((e) => e.title.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 4 && !GENERIC.has(w)))
+    .find((w) => q.includes(w))
 
   const staff = findStaff(ctx, q)
 
@@ -139,9 +145,8 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
   }
 
   /* Regattas: who's going */
-  if (/regatta|frostbite|turkey bowl|championship|invitational/.test(q) && /going|interested|answer|respond|signed|coming|chaperone|who|how many|entries|entered/.test(q)) {
-    const words = q.match(/frostbite|turkey bowl|championship|invitational/)
-    const res = regattasInfo(ctx, { search: words?.[0] })
+  if ((/regatta|championship|invitational/.test(q) || eventWord) && /going|interested|answer|respond|coming|chaperone|who('s| is) (in|racing)|how many|entries|entered/.test(q) && !/slip|permission|signed/.test(q)) {
+    const res = regattasInfo(ctx, { search: eventWord })
     const r = res.regattas[0]
     if (!r) return { text: 'No upcoming regattas match that.', actions }
     actions.push({ kind: 'link', label: `Open ${r.title}`, href: r.page })
@@ -153,7 +158,7 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
         title: `${r.title}: are you in?`,
         body: `Let us know${r.entryDeadline ? ` by ${r.entryDeadline}` : ' this week'}. Open Burgee and tap Interested or Going so coaches can plan.`,
         audience: { kind: 'families', familyIds: fams, label: `${r.title}: no answer yet` },
-        channels: ['email', 'sms'],
+        channels: ['push', 'email'],
       })
     }
     return {
@@ -167,9 +172,27 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
     }
   }
 
+  /* Evaluations waiting for approval */
+  if (/evaluation/.test(q) && /(approv|waiting|pending|review|sign off)/.test(q)) {
+    const res = progressInfo(ctx, {})
+    actions.push({ kind: 'link', label: 'Review evaluations', href: res.progressPage })
+    if (!res.waitingForApproval.length) return { text: 'No evaluations are waiting for you.', actions }
+    return {
+      text: `**${res.waitingForApproval.length} evaluations** are waiting for your approval. Families see them once you approve:\n\n${list(res.waitingForApproval.map((e) => `${e.sailor}, from ${e.coach} (${e.written})`))}`,
+      actions,
+    }
+  }
+
   /* Progress and evaluations */
   if (/move up|ready for|progress|skills?\b|evaluation|evals?\b|how (is|'s) \w+ doing|how.s \w+ doing/.test(q)) {
-    const kid = ctx.s.sailors.find((k) => new RegExp(`\\b${k.firstName.toLowerCase()}\\b`).test(q) && ctx.s.registrations.some((r) => r.sailorId === k.id && r.status === 'confirmed' && r.sessionId.endsWith('fall-26')))
+    const todayIso = format(ctx.now, 'yyyy-MM-dd')
+    const here = (id: string) =>
+      ctx.s.registrations.some((r) => {
+        const se = r.sailorId === id && r.status === 'confirmed' ? ctx.s.sessions.find((x) => x.id === r.sessionId) : undefined
+        return !!se && se.startDate <= todayIso && se.endDate >= todayIso
+      })
+    const named = ctx.s.sailors.filter((k) => new RegExp(`\\b${k.firstName.toLowerCase()}\\b`).test(q))
+    const kid = named.find((k) => (k.id === 's-hazel' || k.id === 's-finn' || k.id === 's-lucy') && here(k.id)) ?? named.find((k) => here(k.id))
     const program = matchPrograms(q).length ? q : undefined
     const res = progressInfo(ctx, { sailor: kid ? `${kid.firstName} ${kid.lastName}` : undefined, program })
     actions.push({ kind: 'link', label: 'Open progress', href: '/admin/progress' })
@@ -184,7 +207,7 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
     }
     if (/evaluation|evals?\b/.test(q)) {
       const missing = res.rows.filter((r) => r.evaluation === 'not written')
-      return { text: `**${missing.length} of ${res.rows.length}** fall team sailors don’t have an evaluation yet.\n\n${list(missing.map((r) => `${r.sailor} (${r.team})`), 15)}`, actions }
+      return { text: `**${missing.length} of ${res.rows.length}** sailors this week don’t have an evaluation yet.\n\n${list(missing.map((r) => `${r.sailor} (${r.team})`), 15)}`, actions }
     }
     const ready = res.rows.filter((r) => r.readyToMoveUp)
     const close = res.rows.filter((r) => !r.readyToMoveUp && Number(r.skills.split(' ')[0]) >= 6)
@@ -219,8 +242,7 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
 
   /* Calendar */
   if (/coming up|upcoming|calendar|schedule|when is|when's|regatta|deadline|this weekend|next week|events?\b|banquet|meeting/.test(q)) {
-    const term = q.match(/frostbite|championship|invitational|banquet|meeting|pizza|cpr|onboarding|early.?bird/)?.[0]
-    const res = calendarInfo(ctx, { search: term?.replace(/\s+/g, ' '), days: /week/.test(q) ? 7 : 60 })
+    const res = calendarInfo(ctx, { search: /when is|when's/.test(q) ? eventWord : undefined, days: /week/.test(q) ? 7 : 60 })
     actions.push({ kind: 'link', label: 'Open calendar', href: '/admin/calendar' })
     if (!res.events.length) return { text: 'Nothing on the calendar for that.', actions }
     return {
@@ -230,7 +252,7 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
   }
 
   /* One-off forms sent to families (permission slips) */
-  if (/permission|slip|frostbite|sent (a |the )?form|forms? (we|i) sent/.test(q)) {
+  if (/permission|slip|sent (a |the )?form|forms? (we|i) sent/.test(q)) {
     const reqs = formRequestsInfo(ctx)
     actions.push({ kind: 'link', label: 'Open forms & waivers', href: '/admin/forms' })
     if (!reqs.length) return { text: 'No forms have been sent out for signature yet.', actions }
@@ -278,6 +300,29 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
     return { text: text || 'Nobody has a worrying attendance record right now.', actions }
   }
 
+  /* Who's out, late or being picked up by someone else */
+  if (/(who('s| is)? out|absent|out today|picking (\w+ )?up|picked up|pickup|running late|late today|leaving early|day notes?|parent notes? (for )?today)/.test(q)) {
+    const res = parentNotesInfo(ctx, { date: /tomorrow|this week|upcoming|coming/.test(q) ? 'upcoming' : undefined })
+    actions.push({ kind: 'link', label: 'Open attendance', href: res.attendancePage })
+    if (!res.rows.length) return { text: `Nobody has told the coaches anything for ${res.date}.`, actions }
+    return {
+      text: `Parents sent **${res.rows.length} note${res.rows.length === 1 ? '' : 's'}** for ${res.date}. The coaches already see them on their rosters:\n\n${list(res.rows.map((r) => `**${r.sailor}** ${r.what}${r.note ? ` (“${r.note}”)` : ''}, from ${r.toldBy.split(' ')[0]}${r.coach ? `. Coach: ${r.coach}` : ''}`))}`,
+      actions,
+    }
+  }
+
+  /* Inbox */
+  if (/(inbox|unread|new messages|any messages|who (wrote|messaged|emailed)|waiting (on|for) me|questions from parents)/.test(q)) {
+    const res = inboxInfo(ctx, {})
+    actions.push({ kind: 'link', label: 'Open the inbox', href: res.inboxPage })
+    const waiting = res.rows.filter((r) => r.waitingForDirector)
+    if (!waiting.length) return { text: 'Nothing is waiting for you in the inbox.', actions }
+    return {
+      text: `**${waiting.length} conversation${waiting.length === 1 ? '' : 's'}** waiting for you:\n\n${list(waiting.map((r) => `**${r.subject}**, ${r.lastFrom}: “${r.lastMessage}”`))}`,
+      actions,
+    }
+  }
+
   /* Parent notes */
   if (/\bnotes?\b|parents? (said|wrote|told)|anything (i|coaches) should know/.test(q) && !/\bforms?\b/.test(q)) {
     const sc = scopeOf(q)
@@ -290,34 +335,11 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
     }
   }
 
-  /* Money */
-  if (/\b(owe|owes|owing|balance|unpaid|outstanding payment|paid|payment|collected|revenue|tuition|money)\b/.test(q)) {
-    const m = moneyInfo(ctx)
-    if (famMentioned) {
-      const f = familyInfo(ctx, { name: famMentioned.name }).families[0]
-      const due = f.registrations.filter((r) => r.status === 'pending-payment')
-      actions.push({ kind: 'link', label: `Open the ${f.family} family`, href: f.href })
-      return {
-        text: f.balanceDue
-          ? `The [${f.family} family](${f.href}) owes **${money(f.balanceDue)}**:\n\n${list(due.map((r) => `${r.sailor}, ${r.session}: ${money(r.price - r.paid)}`))}`
-          : `The [${f.family} family](${f.href}) is paid up. Nothing is due.`,
-        actions,
-      }
-    }
-    actions.push({ kind: 'link', label: 'Open balance-due registrations', href: '/admin/registrations?status=pending-payment' })
-    if (/revenue|collected|booked|tuition|how much/.test(q) && !/owe|unpaid|balance/.test(q)) {
-      return {
-        text: `Tuition booked vs collected:\n\n${list(m.byTerm.map((t) => `**${t.term}**: ${money(t.booked)} booked, ${money(t.collected)} collected`))}\n\nUnpaid right now: **${money(m.totalOutstanding)}**.`,
-        actions,
-      }
-    }
-    if (!m.familiesWithBalance.length) return { text: 'No one owes anything right now.', actions }
+  /* Money: lives in the club's registration system */
+  if (/\b(owe|owes|owing|balance|unpaid|outstanding payment|payment|collected|revenue|tuition|money)\b/.test(q)) {
     return {
-      text: `**${m.familiesWithBalance.length} families owe ${money(m.totalOutstanding)}** in total:\n\n${list(
-        m.familiesWithBalance.map((f) => `[${f.family}](${f.href}): ${money(f.due)} for ${f.for.join('; ')}`),
-        10
-      )}`,
-      actions,
+      text: 'Burgee doesn’t handle payments: sign-ups and balances stay in your registration system (Clubspot or whatever the club uses). I can tell you who is signed up for which weeks, though.',
+      actions: [{ kind: 'link', label: 'Open registrations', href: '/admin/registrations' }],
     }
   }
 
@@ -334,7 +356,7 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
         title: `Reminder: ${ctx.s.settings.season} forms`,
         body: `Hi! Our records show your sailor is still missing ${form ? `the ${res.form}` : 'one or more season forms'} for ${ctx.s.settings.season}. It takes about a minute from your phone in Burgee. Sailors need these on file before their next session. Thank you!`,
         audience: { kind: 'outstanding-forms' },
-        channels: ['email', 'sms'],
+        channels: ['push', 'email'],
       })
     }
     if (!res.rows.length) return { text: `Everyone registered${scopeLabel(ctx, q) ? ' in that session' : ''} has ${form ? `their ${res.form}` : 'all their forms'} in.`, actions }
@@ -428,8 +450,7 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
     return {
       text:
         `**[${f.family} family](${f.href})**, ${f.membership}. ${f.guardians.map((g) => `${g.name} ${g.phone}`).join(', ')}.\n\n` +
-        list(f.sailors.map((k) => `**${k.name}** (${k.fleet})${k.medicalAlerts.length ? `, ${k.medicalAlerts.join('; ')}` : ''}${k.formsMissing.length ? `, missing ${k.formsMissing.join(', ').toLowerCase()}` : ''}: ${f.registrations.filter((r) => r.sailor === k.name).map((r) => `${r.session} (${r.status})`).join('; ') || 'no registrations'}`)) +
-        (f.balanceDue ? `\n\nBalance due: **${money(f.balanceDue)}**.` : ''),
+        list(f.sailors.map((k) => `**${k.name}** (${k.fleet})${k.medicalAlerts.length ? `, ${k.medicalAlerts.join('; ')}` : ''}${k.formsMissing.length ? `, missing ${k.formsMissing.join(', ').toLowerCase()}` : ''}: ${f.registrations.filter((r) => r.sailor === k.name).map((r) => `${r.session} (${r.status})`).join('; ') || 'no registrations'}`)),
       actions,
     }
   }
@@ -444,16 +465,16 @@ export function answerLocally(question: string, ctx: Ctx): LocalAnswer {
 
   return {
     text:
-      "I can look up staff certifications, waitlists, full or open weeks, rosters and coach ratios, missing forms, medical alerts, balances, and any family by name. Try one of the suggestions, or ask something like \"who's on the Opti Green week 3 waitlist?\"",
+      "I can look up who's out today, messages waiting for you, evaluations to approve, staff certifications, rosters and coach ratios, missing forms, medical alerts, regattas, and any family or sailor by name. Try one of the suggestions, or ask something like \"who's picking up early today?\"",
     actions,
   }
 }
 
 export const SUGGESTIONS = [
   'Who still needs their SafeSport?',
-  "Who's on the Green Camp week 3 waitlist?",
-  'Who hasn’t signed the Frostbite permission slip?',
+  "Who's out today?",
+  'Which evaluations need my approval?',
+  'Who hasn’t signed the Harbor Island permission slip?',
   'Who still needs a swim check?',
-  'Which families owe money?',
   'Remind families who are missing forms',
 ]

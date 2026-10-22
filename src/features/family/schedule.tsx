@@ -1,6 +1,10 @@
 import { addDays, format } from 'date-fns'
-import { MapPin, Sailboat, Trophy } from 'lucide-react'
+import { CalendarPlus, MapPin, Sailboat, Trophy } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { saveFile } from '@/lib/files'
+import { buildIcs, parseTimeRange, type IcsEvent } from '@/lib/ics'
+import { Button } from '@/components/ui/button'
 import { familyRegs, programById, useLookups, useNow } from '@/data/hooks'
 import { useStore } from '@/data/store'
 import { meetsOn } from '@/domain/attendance'
@@ -67,10 +71,47 @@ export function FamilySchedule() {
     })
     .filter((x) => x.items.length)
 
+  // Every sailing day this season plus the regattas you answered, as a calendar file.
+  const exportCalendar = async () => {
+    const clubName = useStore.getState().settings.clubName
+    const events: IcsEvent[] = []
+    for (const r of mine) {
+      const se = look.session.get(r.sessionId)
+      if (!se || se.endDate < format(now, 'yyyy-MM-dd')) continue
+      const kid = look.sailor.get(r.sailorId)!
+      const range = parseTimeRange(se.time)
+      for (let d = new Date(`${se.startDate}T12:00:00`); format(d, 'yyyy-MM-dd') <= se.endDate; d = addDays(d, 1)) {
+        if (!meetsOn(se, d) || format(d, 'yyyy-MM-dd') < format(now, 'yyyy-MM-dd')) continue
+        const at = (hm: [number, number]) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), hm[0], hm[1])
+        events.push({
+          uid: `${r.id}-${format(d, 'yyyyMMdd')}`,
+          title: `${kid.firstName}: ${programById.get(se.programId)!.name}`,
+          start: range ? at(range.start) : d,
+          end: range ? at(range.end) : undefined,
+          allDay: !range,
+          location: clubName,
+        })
+      }
+    }
+    for (const r of regattas) {
+      if (![...r.responses.values()].some((x) => x.status !== 'not-going')) continue
+      events.push({ uid: r.event.id, title: r.event.title, start: new Date(`${r.event.date}T12:00:00`), end: r.event.endDate ? new Date(`${r.event.endDate}T12:00:00`) : undefined, allDay: true, location: r.event.location })
+    }
+    const ok = await saveFile(`${family.name.toLowerCase()}-sailing.ics`, buildIcs(`${clubName} sailing`, events, now), 'text/calendar')
+    if (ok) toast.success(`${events.length} dates ready. Open the file to add them to your calendar.`)
+  }
+
   return (
     <div className='px-4 py-5'>
-      <h1 className='text-2xl font-semibold'>Schedule</h1>
-      <p className='text-sm text-muted-foreground'>The next three weeks for {kids.map((k) => k.firstName).join(' and ')}.</p>
+      <div className='flex items-start justify-between gap-3'>
+        <div>
+          <h1 className='text-2xl font-semibold'>Schedule</h1>
+          <p className='text-sm text-muted-foreground'>The next three weeks for {kids.map((k) => k.firstName).join(' and ')}.</p>
+        </div>
+        <Button size='sm' variant='outline' onClick={exportCalendar}>
+          <CalendarPlus className='size-4' /> Add to calendar
+        </Button>
+      </div>
       <ol className='mt-5 space-y-5'>
         {byDay.map(({ d, iso, items }) => (
           <li key={iso}>

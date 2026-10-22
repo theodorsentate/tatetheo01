@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as CoachRouteRouteImport } from './routes/coach/route'
 import { Route as FamilyRouteRouteImport } from './routes/family/route'
+import { Route as SailorRouteRouteImport } from './routes/sailor/route'
 import { Route as errors401RouteImport } from './routes/(errors)/401'
 import { Route as errors403RouteImport } from './routes/(errors)/403'
 import { Route as errors404RouteImport } from './routes/(errors)/404'
@@ -26,9 +27,9 @@ import { Route as AdminDocumentsRouteImport } from './routes/admin/documents'
 import { Route as AdminEquipmentRouteImport } from './routes/admin/equipment'
 import { Route as AdminFamiliesRouteImport } from './routes/admin/families'
 import { Route as AdminFormsRouteImport } from './routes/admin/forms'
+import { Route as AdminInboxRouteImport } from './routes/admin/inbox'
 import { Route as AdminIncidentsRouteImport } from './routes/admin/incidents'
 import { Route as AdminMessagesRouteImport } from './routes/admin/messages'
-import { Route as AdminPaymentsRouteImport } from './routes/admin/payments'
 import { Route as AdminProgramsRouteImport } from './routes/admin/programs'
 import { Route as AdminProgressRouteImport } from './routes/admin/progress'
 import { Route as AdminRegattasRouteImport } from './routes/admin/regattas'
@@ -40,12 +41,13 @@ import { Route as AdminStaffRouteImport } from './routes/admin/staff'
 import { Route as CoachIndexRouteImport } from './routes/coach/index'
 import { Route as CoachCertsRouteImport } from './routes/coach/certs'
 import { Route as CoachMessagesRouteImport } from './routes/coach/messages'
+import { Route as CommitteeIndexRouteImport } from './routes/committee/index'
 import { Route as FamilyIndexRouteImport } from './routes/family/index'
-import { Route as FamilyCheckoutRouteImport } from './routes/family/checkout'
 import { Route as FamilyFormsRouteImport } from './routes/family/forms'
 import { Route as FamilyMessagesRouteImport } from './routes/family/messages'
-import { Route as FamilyRegisterRouteImport } from './routes/family/register'
 import { Route as FamilyScheduleRouteImport } from './routes/family/schedule'
+import { Route as SailorIndexRouteImport } from './routes/sailor/index'
+import { Route as SailorMessagesRouteImport } from './routes/sailor/messages'
 import { Route as AdminSessionsSessionIdRouteImport } from './routes/admin/sessions/$sessionId'
 import { Route as CoachGroupsGroupIdRouteImport } from './routes/coach/groups/$groupId'
 
@@ -67,6 +69,11 @@ const CoachRouteRoute = CoachRouteRouteImport.update({
 const FamilyRouteRoute = FamilyRouteRouteImport.update({
   id: '/family',
   path: '/family',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SailorRouteRoute = SailorRouteRouteImport.update({
+  id: '/sailor',
+  path: '/sailor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const errors401Route = errors401RouteImport.update({
@@ -134,6 +141,11 @@ const AdminFormsRoute = AdminFormsRouteImport.update({
   path: '/forms',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminInboxRoute = AdminInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminIncidentsRoute = AdminIncidentsRouteImport.update({
   id: '/incidents',
   path: '/incidents',
@@ -142,11 +154,6 @@ const AdminIncidentsRoute = AdminIncidentsRouteImport.update({
 const AdminMessagesRoute = AdminMessagesRouteImport.update({
   id: '/messages',
   path: '/messages',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
-const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
-  id: '/payments',
-  path: '/payments',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminProgramsRoute = AdminProgramsRouteImport.update({
@@ -204,14 +211,14 @@ const CoachMessagesRoute = CoachMessagesRouteImport.update({
   path: '/messages',
   getParentRoute: () => CoachRouteRoute,
 } as any)
+const CommitteeIndexRoute = CommitteeIndexRouteImport.update({
+  id: '/committee/',
+  path: '/committee/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FamilyIndexRoute = FamilyIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => FamilyRouteRoute,
-} as any)
-const FamilyCheckoutRoute = FamilyCheckoutRouteImport.update({
-  id: '/checkout',
-  path: '/checkout',
   getParentRoute: () => FamilyRouteRoute,
 } as any)
 const FamilyFormsRoute = FamilyFormsRouteImport.update({
@@ -224,15 +231,20 @@ const FamilyMessagesRoute = FamilyMessagesRouteImport.update({
   path: '/messages',
   getParentRoute: () => FamilyRouteRoute,
 } as any)
-const FamilyRegisterRoute = FamilyRegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => FamilyRouteRoute,
-} as any)
 const FamilyScheduleRoute = FamilyScheduleRouteImport.update({
   id: '/schedule',
   path: '/schedule',
   getParentRoute: () => FamilyRouteRoute,
+} as any)
+const SailorIndexRoute = SailorIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SailorRouteRoute,
+} as any)
+const SailorMessagesRoute = SailorMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => SailorRouteRoute,
 } as any)
 const AdminSessionsSessionIdRoute = AdminSessionsSessionIdRouteImport.update({
   id: '/sessions/$sessionId',
@@ -250,6 +262,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteRouteWithChildren
   '/coach': typeof CoachRouteRouteWithChildren
   '/family': typeof FamilyRouteRouteWithChildren
+  '/sailor': typeof SailorRouteRouteWithChildren
   '/401': typeof errors401Route
   '/403': typeof errors403Route
   '/404': typeof errors404Route
@@ -262,9 +275,9 @@ export interface FileRoutesByFullPath {
   '/admin/equipment': typeof AdminEquipmentRoute
   '/admin/families': typeof AdminFamiliesRoute
   '/admin/forms': typeof AdminFormsRoute
+  '/admin/inbox': typeof AdminInboxRoute
   '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/messages': typeof AdminMessagesRoute
-  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/programs': typeof AdminProgramsRoute
   '/admin/progress': typeof AdminProgressRoute
   '/admin/regattas': typeof AdminRegattasRoute
@@ -275,14 +288,15 @@ export interface FileRoutesByFullPath {
   '/admin/staff': typeof AdminStaffRoute
   '/coach/certs': typeof CoachCertsRoute
   '/coach/messages': typeof CoachMessagesRoute
-  '/family/checkout': typeof FamilyCheckoutRoute
   '/family/forms': typeof FamilyFormsRoute
   '/family/messages': typeof FamilyMessagesRoute
-  '/family/register': typeof FamilyRegisterRoute
   '/family/schedule': typeof FamilyScheduleRoute
+  '/sailor/messages': typeof SailorMessagesRoute
   '/admin/': typeof AdminIndexRoute
   '/coach/': typeof CoachIndexRoute
+  '/committee/': typeof CommitteeIndexRoute
   '/family/': typeof FamilyIndexRoute
+  '/sailor/': typeof SailorIndexRoute
   '/admin/sessions/$sessionId': typeof AdminSessionsSessionIdRoute
   '/coach/groups/$groupId': typeof CoachGroupsGroupIdRoute
 }
@@ -300,9 +314,9 @@ export interface FileRoutesByTo {
   '/admin/equipment': typeof AdminEquipmentRoute
   '/admin/families': typeof AdminFamiliesRoute
   '/admin/forms': typeof AdminFormsRoute
+  '/admin/inbox': typeof AdminInboxRoute
   '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/messages': typeof AdminMessagesRoute
-  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/programs': typeof AdminProgramsRoute
   '/admin/progress': typeof AdminProgressRoute
   '/admin/regattas': typeof AdminRegattasRoute
@@ -313,14 +327,15 @@ export interface FileRoutesByTo {
   '/admin/staff': typeof AdminStaffRoute
   '/coach/certs': typeof CoachCertsRoute
   '/coach/messages': typeof CoachMessagesRoute
-  '/family/checkout': typeof FamilyCheckoutRoute
   '/family/forms': typeof FamilyFormsRoute
   '/family/messages': typeof FamilyMessagesRoute
-  '/family/register': typeof FamilyRegisterRoute
   '/family/schedule': typeof FamilyScheduleRoute
+  '/sailor/messages': typeof SailorMessagesRoute
   '/admin': typeof AdminIndexRoute
   '/coach': typeof CoachIndexRoute
+  '/committee': typeof CommitteeIndexRoute
   '/family': typeof FamilyIndexRoute
+  '/sailor': typeof SailorIndexRoute
   '/admin/sessions/$sessionId': typeof AdminSessionsSessionIdRoute
   '/coach/groups/$groupId': typeof CoachGroupsGroupIdRoute
 }
@@ -330,6 +345,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteRouteWithChildren
   '/coach': typeof CoachRouteRouteWithChildren
   '/family': typeof FamilyRouteRouteWithChildren
+  '/sailor': typeof SailorRouteRouteWithChildren
   '/(errors)/401': typeof errors401Route
   '/(errors)/403': typeof errors403Route
   '/(errors)/404': typeof errors404Route
@@ -342,9 +358,9 @@ export interface FileRoutesById {
   '/admin/equipment': typeof AdminEquipmentRoute
   '/admin/families': typeof AdminFamiliesRoute
   '/admin/forms': typeof AdminFormsRoute
+  '/admin/inbox': typeof AdminInboxRoute
   '/admin/incidents': typeof AdminIncidentsRoute
   '/admin/messages': typeof AdminMessagesRoute
-  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/programs': typeof AdminProgramsRoute
   '/admin/progress': typeof AdminProgressRoute
   '/admin/regattas': typeof AdminRegattasRoute
@@ -355,14 +371,15 @@ export interface FileRoutesById {
   '/admin/staff': typeof AdminStaffRoute
   '/coach/certs': typeof CoachCertsRoute
   '/coach/messages': typeof CoachMessagesRoute
-  '/family/checkout': typeof FamilyCheckoutRoute
   '/family/forms': typeof FamilyFormsRoute
   '/family/messages': typeof FamilyMessagesRoute
-  '/family/register': typeof FamilyRegisterRoute
   '/family/schedule': typeof FamilyScheduleRoute
+  '/sailor/messages': typeof SailorMessagesRoute
   '/admin/': typeof AdminIndexRoute
   '/coach/': typeof CoachIndexRoute
+  '/committee/': typeof CommitteeIndexRoute
   '/family/': typeof FamilyIndexRoute
+  '/sailor/': typeof SailorIndexRoute
   '/admin/sessions/$sessionId': typeof AdminSessionsSessionIdRoute
   '/coach/groups/$groupId': typeof CoachGroupsGroupIdRoute
 }
@@ -373,6 +390,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/coach'
     | '/family'
+    | '/sailor'
     | '/401'
     | '/403'
     | '/404'
@@ -385,9 +403,9 @@ export interface FileRouteTypes {
     | '/admin/equipment'
     | '/admin/families'
     | '/admin/forms'
+    | '/admin/inbox'
     | '/admin/incidents'
     | '/admin/messages'
-    | '/admin/payments'
     | '/admin/programs'
     | '/admin/progress'
     | '/admin/regattas'
@@ -398,14 +416,15 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/coach/certs'
     | '/coach/messages'
-    | '/family/checkout'
     | '/family/forms'
     | '/family/messages'
-    | '/family/register'
     | '/family/schedule'
+    | '/sailor/messages'
     | '/admin/'
     | '/coach/'
+    | '/committee/'
     | '/family/'
+    | '/sailor/'
     | '/admin/sessions/$sessionId'
     | '/coach/groups/$groupId'
   fileRoutesByTo: FileRoutesByTo
@@ -423,9 +442,9 @@ export interface FileRouteTypes {
     | '/admin/equipment'
     | '/admin/families'
     | '/admin/forms'
+    | '/admin/inbox'
     | '/admin/incidents'
     | '/admin/messages'
-    | '/admin/payments'
     | '/admin/programs'
     | '/admin/progress'
     | '/admin/regattas'
@@ -436,14 +455,15 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/coach/certs'
     | '/coach/messages'
-    | '/family/checkout'
     | '/family/forms'
     | '/family/messages'
-    | '/family/register'
     | '/family/schedule'
+    | '/sailor/messages'
     | '/admin'
     | '/coach'
+    | '/committee'
     | '/family'
+    | '/sailor'
     | '/admin/sessions/$sessionId'
     | '/coach/groups/$groupId'
   id:
@@ -452,6 +472,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/coach'
     | '/family'
+    | '/sailor'
     | '/(errors)/401'
     | '/(errors)/403'
     | '/(errors)/404'
@@ -464,9 +485,9 @@ export interface FileRouteTypes {
     | '/admin/equipment'
     | '/admin/families'
     | '/admin/forms'
+    | '/admin/inbox'
     | '/admin/incidents'
     | '/admin/messages'
-    | '/admin/payments'
     | '/admin/programs'
     | '/admin/progress'
     | '/admin/regattas'
@@ -477,14 +498,15 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/coach/certs'
     | '/coach/messages'
-    | '/family/checkout'
     | '/family/forms'
     | '/family/messages'
-    | '/family/register'
     | '/family/schedule'
+    | '/sailor/messages'
     | '/admin/'
     | '/coach/'
+    | '/committee/'
     | '/family/'
+    | '/sailor/'
     | '/admin/sessions/$sessionId'
     | '/coach/groups/$groupId'
   fileRoutesById: FileRoutesById
@@ -494,11 +516,13 @@ export interface RootRouteChildren {
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
   CoachRouteRoute: typeof CoachRouteRouteWithChildren
   FamilyRouteRoute: typeof FamilyRouteRouteWithChildren
+  SailorRouteRoute: typeof SailorRouteRouteWithChildren
   errors401Route: typeof errors401Route
   errors403Route: typeof errors403Route
   errors404Route: typeof errors404Route
   errors500Route: typeof errors500Route
   errors503Route: typeof errors503Route
+  CommitteeIndexRoute: typeof CommitteeIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -529,6 +553,13 @@ declare module '@tanstack/react-router' {
       path: '/family'
       fullPath: '/family'
       preLoaderRoute: typeof FamilyRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sailor': {
+      id: '/sailor'
+      path: '/sailor'
+      fullPath: '/sailor'
+      preLoaderRoute: typeof SailorRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/(errors)/401': {
@@ -622,6 +653,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminFormsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/inbox': {
+      id: '/admin/inbox'
+      path: '/inbox'
+      fullPath: '/admin/inbox'
+      preLoaderRoute: typeof AdminInboxRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/incidents': {
       id: '/admin/incidents'
       path: '/incidents'
@@ -634,13 +672,6 @@ declare module '@tanstack/react-router' {
       path: '/messages'
       fullPath: '/admin/messages'
       preLoaderRoute: typeof AdminMessagesRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
-    '/admin/payments': {
-      id: '/admin/payments'
-      path: '/payments'
-      fullPath: '/admin/payments'
-      preLoaderRoute: typeof AdminPaymentsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/programs': {
@@ -720,18 +751,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CoachMessagesRouteImport
       parentRoute: typeof CoachRouteRoute
     }
+    '/committee/': {
+      id: '/committee/'
+      path: '/committee'
+      fullPath: '/committee/'
+      preLoaderRoute: typeof CommitteeIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/family/': {
       id: '/family/'
       path: '/'
       fullPath: '/family/'
       preLoaderRoute: typeof FamilyIndexRouteImport
-      parentRoute: typeof FamilyRouteRoute
-    }
-    '/family/checkout': {
-      id: '/family/checkout'
-      path: '/checkout'
-      fullPath: '/family/checkout'
-      preLoaderRoute: typeof FamilyCheckoutRouteImport
       parentRoute: typeof FamilyRouteRoute
     }
     '/family/forms': {
@@ -748,19 +779,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FamilyMessagesRouteImport
       parentRoute: typeof FamilyRouteRoute
     }
-    '/family/register': {
-      id: '/family/register'
-      path: '/register'
-      fullPath: '/family/register'
-      preLoaderRoute: typeof FamilyRegisterRouteImport
-      parentRoute: typeof FamilyRouteRoute
-    }
     '/family/schedule': {
       id: '/family/schedule'
       path: '/schedule'
       fullPath: '/family/schedule'
       preLoaderRoute: typeof FamilyScheduleRouteImport
       parentRoute: typeof FamilyRouteRoute
+    }
+    '/sailor/': {
+      id: '/sailor/'
+      path: '/'
+      fullPath: '/sailor/'
+      preLoaderRoute: typeof SailorIndexRouteImport
+      parentRoute: typeof SailorRouteRoute
+    }
+    '/sailor/messages': {
+      id: '/sailor/messages'
+      path: '/messages'
+      fullPath: '/sailor/messages'
+      preLoaderRoute: typeof SailorMessagesRouteImport
+      parentRoute: typeof SailorRouteRoute
     }
     '/admin/sessions/$sessionId': {
       id: '/admin/sessions/$sessionId'
@@ -787,9 +825,9 @@ interface AdminRouteRouteChildren {
   AdminEquipmentRoute: typeof AdminEquipmentRoute
   AdminFamiliesRoute: typeof AdminFamiliesRoute
   AdminFormsRoute: typeof AdminFormsRoute
+  AdminInboxRoute: typeof AdminInboxRoute
   AdminIncidentsRoute: typeof AdminIncidentsRoute
   AdminMessagesRoute: typeof AdminMessagesRoute
-  AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminProgramsRoute: typeof AdminProgramsRoute
   AdminProgressRoute: typeof AdminProgressRoute
   AdminRegattasRoute: typeof AdminRegattasRoute
@@ -810,9 +848,9 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminEquipmentRoute: AdminEquipmentRoute,
   AdminFamiliesRoute: AdminFamiliesRoute,
   AdminFormsRoute: AdminFormsRoute,
+  AdminInboxRoute: AdminInboxRoute,
   AdminIncidentsRoute: AdminIncidentsRoute,
   AdminMessagesRoute: AdminMessagesRoute,
-  AdminPaymentsRoute: AdminPaymentsRoute,
   AdminProgramsRoute: AdminProgramsRoute,
   AdminProgressRoute: AdminProgressRoute,
   AdminRegattasRoute: AdminRegattasRoute,
@@ -848,19 +886,15 @@ const CoachRouteRouteWithChildren = CoachRouteRoute._addFileChildren(
 )
 
 interface FamilyRouteRouteChildren {
-  FamilyCheckoutRoute: typeof FamilyCheckoutRoute
   FamilyFormsRoute: typeof FamilyFormsRoute
   FamilyMessagesRoute: typeof FamilyMessagesRoute
-  FamilyRegisterRoute: typeof FamilyRegisterRoute
   FamilyScheduleRoute: typeof FamilyScheduleRoute
   FamilyIndexRoute: typeof FamilyIndexRoute
 }
 
 const FamilyRouteRouteChildren: FamilyRouteRouteChildren = {
-  FamilyCheckoutRoute: FamilyCheckoutRoute,
   FamilyFormsRoute: FamilyFormsRoute,
   FamilyMessagesRoute: FamilyMessagesRoute,
-  FamilyRegisterRoute: FamilyRegisterRoute,
   FamilyScheduleRoute: FamilyScheduleRoute,
   FamilyIndexRoute: FamilyIndexRoute,
 }
@@ -869,16 +903,32 @@ const FamilyRouteRouteWithChildren = FamilyRouteRoute._addFileChildren(
   FamilyRouteRouteChildren,
 )
 
+interface SailorRouteRouteChildren {
+  SailorMessagesRoute: typeof SailorMessagesRoute
+  SailorIndexRoute: typeof SailorIndexRoute
+}
+
+const SailorRouteRouteChildren: SailorRouteRouteChildren = {
+  SailorMessagesRoute: SailorMessagesRoute,
+  SailorIndexRoute: SailorIndexRoute,
+}
+
+const SailorRouteRouteWithChildren = SailorRouteRoute._addFileChildren(
+  SailorRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRouteRoute: AdminRouteRouteWithChildren,
   CoachRouteRoute: CoachRouteRouteWithChildren,
   FamilyRouteRoute: FamilyRouteRouteWithChildren,
+  SailorRouteRoute: SailorRouteRouteWithChildren,
   errors401Route: errors401Route,
   errors403Route: errors403Route,
   errors404Route: errors404Route,
   errors500Route: errors500Route,
   errors503Route: errors503Route,
+  CommitteeIndexRoute: CommitteeIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

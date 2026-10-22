@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Main } from '@/components/layout/main'
 import { FleetChip, PageHeader } from '@/components/burgee/marks'
+import { now as clockNow } from '@/lib/clock'
 
 type Flag = 'medical' | 'forms' | 'swim' | 'note'
 
@@ -29,7 +30,7 @@ export function SailorsDirectory() {
   const [level, setLevel] = useState('all')
   const [program, setProgram] = useState('all')
   const [flags, setFlags] = useState<Flag[]>([])
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const today = format(clockNow(), 'yyyy-MM-dd')
 
   const rows = useMemo(() => {
     const live = regs.filter((r) => ACTIVE_STATUSES.has(r.status))

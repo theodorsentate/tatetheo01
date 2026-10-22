@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { now as clockNow } from '@/lib/clock'
 
 type Scope = { kind: 'missing' } | { kind: 'all' } | { kind: 'program'; id: string } | { kind: 'session'; id: string }
 const enc = (s: Scope) => JSON.stringify(s)
@@ -33,7 +34,7 @@ export function SendFormDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const templates = useMemo(() => [...custom, ...FORM_TEMPLATES], [custom])
   const [templateId, setTemplateId] = useState('frostbite-slip')
   const [scope, setScope] = useState<Scope>({ kind: 'missing' })
-  const [due, setDue] = useState(format(addDays(new Date(), 10), 'yyyy-MM-dd'))
+  const [due, setDue] = useState(format(addDays(clockNow(), 10), 'yyyy-MM-dd'))
   const [channels, setChannels] = useState<Channel[]>(['email', 'sms'])
   const [message, setMessage] = useState('')
   const [building, setBuilding] = useState(false)

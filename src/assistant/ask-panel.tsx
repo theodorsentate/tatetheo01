@@ -170,7 +170,7 @@ export function AskPanel() {
           </SheetTitle>
           <SheetDescription className='text-xs'>
             {claude === 'available'
-              ? 'Claude answers from your club’s live data: rosters, waitlists, certs, forms and balances.'
+              ? 'Claude answers from your club’s live data: rosters, attendance, parent notes, messages, certs and forms.'
               : claude === 'unavailable'
                 ? 'Quick lookups from your club’s live data.'
                 : 'Answers from your club’s live data.'}

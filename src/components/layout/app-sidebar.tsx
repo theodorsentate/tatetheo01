@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/sidebar'
 import { BurgeeMark } from '@/components/burgee/marks'
 import { RoleSwitcher } from '@/components/burgee/role-switcher'
+import { useUnreadCount } from '@/features/inbox/inbox'
 import { SECTIONS, sectionFor } from './data/sidebar-data'
 
 export function AppSidebar() {
@@ -28,6 +29,7 @@ export function AppSidebar() {
   const incidents = useStore((s) => s.incidents)
   const boats = useStore((s) => s.boats)
   const now = useNow(60_000)
+  const unread = useUnreadCount('director')
 
   const pathname = useLocation({ select: (l) => l.pathname })
   const current = sectionFor(pathname)
@@ -37,10 +39,10 @@ export function AppSidebar() {
   const badges = useMemo<Record<string, number>>(() => {
     return {
       staff: coaches.filter((c) => coachCertSummary(coachCertRows(c, CERT_TYPES, now, settings.certWarningDays)) !== 'valid').length,
-      messages: incidents.filter((i) => i.status === 'open').length,
+      messages: unread + incidents.filter((i) => i.status === 'open').length,
       club: boats.filter((b) => b.status !== 'ready').length,
     }
-  }, [coaches, settings, now, incidents, boats])
+  }, [coaches, settings, now, incidents, boats, unread])
   return (
     <Sidebar collapsible={collapsible} variant={variant}>
       <SidebarHeader className='px-3 pt-4'>

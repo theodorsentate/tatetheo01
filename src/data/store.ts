@@ -3,8 +3,11 @@ import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { ACTIVE_STATUSES, quoteCart, type CartItem } from '@/domain/pricing'
 import { autoGroups } from '@/domain/rules'
-import { attendanceKey } from '@/domain/attendance'
+import { attendanceKey, meetsOn } from '@/domain/attendance'
 import type {
+  DayNote,
+  Participant,
+  Thread,
   ActivityEvent,
   Announcement,
   AttendanceStatus,
@@ -33,6 +36,7 @@ import type {
 import { expiredOffers, offersToIssue, seatsLeft } from '@/domain/waitlist'
 import { CERT_TYPES, DEFAULT_SETTINGS, FORM_TEMPLATES, PROGRAMS, TERMS } from './catalog'
 import { createSeed, type DemoState } from './seed'
+import { now as clockNow, setDemoTime as setClock, type DemoTime } from '@/lib/clock'
 
 /**
  * Demo data store.
@@ -43,7 +47,20 @@ import { createSeed, type DemoState } from './seed'
  * do not need to change shape.
  */
 
-export type Role = 'director' | 'coach' | 'family'
+export type Role = 'director' | 'coach' | 'family' | 'sailor' | 'committee'
+
+/** One line of an imported roster, already matched to a session. */
+export type ImportRow = {
+  firstName: string
+  lastName: string
+  dob?: string
+  level: Sailor['level']
+  guardianName: string
+  email: string
+  phone: string
+  sessionId: string
+  status: 'confirmed' | 'waitlisted'
+}
 
 type State = DemoState & {
   settings: ClubSettings
@@ -54,6 +71,23 @@ type State = DemoState & {
 type Actions = {
   setRole: (role: Role) => void
   resetDemo: () => void
+  /** Jump the demo to the morning or afternoon of the camp day (rebuilds the demo data for that moment). */
+  setDemoTime: (time: DemoTime) => void
+
+  // Conversations
+  startThread: (t: { subject: string; participants: Participant[]; familyId?: string; sailorId?: string; announcementId?: string; from: Participant; name: string; text: string }) => string
+  sendMessage: (threadId: string, from: Participant, name: string, text: string) => void
+  markThreadRead: (threadId: string, who: Participant) => void
+
+  // Parents tell coaches about a day
+  addDayNote: (n: Omit<DayNote, 'id' | 'at'>) => void
+  removeDayNote: (id: string) => void
+
+  // Evaluations go to the director before families see them
+  approveEvaluations: (ids: string[], by: string) => void
+
+  // Bring a roster in from a spreadsheet or a Clubspot export
+  importRoster: (rows: ImportRow[]) => { families: number; sailors: number; registrations: number }
 
   // Waitlist engine
   processWaitlists: () => void
@@ -167,19 +201,19 @@ const safeStorage: StateStorage = {
 }
 
 const fresh = (): State => ({
-  ...createSeed(new Date()),
+  ...createSeed(clockNow()),
   settings: structuredClone(DEFAULT_SETTINGS),
   cart: [],
   role: 'director',
 })
 
 function event(kind: ActivityEvent['kind'], text: string): ActivityEvent {
-  return { id: uid('e'), at: new Date().toISOString(), kind, text }
+  return { id: uid('e'), at: clockNow().toISOString(), kind, text }
 }
 
 /** Expire stale offers and fill open seats from the waitlist. */
 function runWaitlist(state: State, sessionIds?: string[]): Partial<State> {
-  const now = new Date()
+  const now = clockNow()
   let registrations = state.registrations
   const events: ActivityEvent[] = []
 
@@ -267,6 +301,126 @@ export const useStore = create<State & Actions>()(
 
       setRole: (role) => set({ role }),
       resetDemo: () => set({ ...fresh(), role: get().role }),
+      setDemoTime: (time) => {
+        setClock(time)
+        set({ ...fresh(), role: get().role })
+      },
+
+      startThread: (t) => {
+        const id = uid('th')
+        const when = clockNow().toISOString()
+        const thread: Thread = {
+          id,
+          subject: t.subject,
+          participants: [...new Set(t.participants)],
+          familyId: t.familyId,
+          sailorId: t.sailorId,
+          announcementId: t.announcementId,
+          messages: [{ id: uid('m'), from: t.from, name: t.name, text: t.text, at: when }],
+          reads: { [t.from]: when },
+        }
+        set((s) => ({ threads: [thread, ...s.threads] }))
+        return id
+      },
+      sendMessage: (threadId, from, name, text) =>
+        set((s) => {
+          const when = clockNow().toISOString()
+          return {
+            threads: s.threads.map((t) =>
+              t.id === threadId ? { ...t, messages: [...t.messages, { id: uid('m'), from, name, text, at: when }], reads: { ...t.reads, [from]: when } } : t
+            ),
+          }
+        }),
+      markThreadRead: (threadId, who) =>
+        set((s) => ({
+          threads: s.threads.map((t) => (t.id === threadId ? { ...t, reads: { ...t.reads, [who]: clockNow().toISOString() } } : t)),
+        })),
+
+      addDayNote: (n) =>
+        set((s) => {
+          const note: DayNote = { ...n, id: uid('dn'), at: clockNow().toISOString() }
+          const kid = s.sailors.find((x) => x.id === n.sailorId)
+          const attendance = { ...s.attendance }
+          // An absence the parent reports marks the sailor absent on every roster that day.
+          if (n.kind === 'absent') {
+            const day = new Date(`${n.date}T12:00:00`)
+            const sessionIds = s.registrations
+              .filter((r) => r.sailorId === n.sailorId && r.status === 'confirmed')
+              .map((r) => s.sessions.find((x) => x.id === r.sessionId)!)
+              .filter((se) => se && meetsOn(se, day))
+              .map((se) => se.id)
+            for (const sid of sessionIds) {
+              const key = attendanceKey(n.date, sid, n.sailorId)
+              if (!attendance[key]) attendance[key] = { sailorId: n.sailorId, sessionId: sid, date: n.date, status: 'absent', updatedAt: note.at, by: `${n.by} (parent)` }
+            }
+          }
+          const what = n.kind === 'absent' ? 'will be out' : n.kind === 'late' ? 'will be late' : n.kind === 'early' ? `leaves early (${n.detail})` : `is being picked up by ${n.detail}`
+          return {
+            dayNotes: [...s.dayNotes.filter((d) => !(d.sailorId === n.sailorId && d.date === n.date && d.kind === n.kind)), note],
+            attendance,
+            events: [event('announcement', `${n.by}: ${kid?.firstName} ${what} on ${format(new Date(`${n.date}T12:00:00`), 'EEE, MMM d')}`), ...s.events],
+          }
+        }),
+      removeDayNote: (id) =>
+        set((s) => {
+          const note = s.dayNotes.find((d) => d.id === id)
+          if (!note) return {}
+          const attendance = { ...s.attendance }
+          if (note.kind === 'absent')
+            for (const [k, v] of Object.entries(attendance)) if (v.sailorId === note.sailorId && v.date === note.date && v.status === 'absent' && v.by.endsWith('(parent)')) delete attendance[k]
+          return { dayNotes: s.dayNotes.filter((d) => d.id !== id), attendance }
+        }),
+
+      approveEvaluations: (ids, by) =>
+        set((s) => {
+          const when = clockNow().toISOString()
+          return {
+            evaluations: s.evaluations.map((e) => (ids.includes(e.id) ? { ...e, status: 'shared', approvedBy: by, approvedAt: when } : e)),
+            events: [event('announcement', `${ids.length} evaluation${ids.length > 1 ? 's' : ''} approved and shared with families`), ...s.events],
+          }
+        }),
+
+      importRoster: (rows) => {
+        const s = get()
+        const families = [...s.families]
+        const sailors = [...s.sailors]
+        const registrations = [...s.registrations]
+        const when = clockNow().toISOString()
+        const counts = { families: 0, sailors: 0, registrations: 0 }
+        for (const r of rows) {
+          const email = r.email.trim().toLowerCase()
+          let fam = families.find((f) => f.guardians.some((g) => g.email.toLowerCase() === email))
+          if (!fam) {
+            fam = {
+              id: uid('f'),
+              name: r.guardianName.split(' ').slice(-1)[0] || r.lastName,
+              membership: 'member',
+              guardians: [{ name: r.guardianName, email: r.email.trim(), phone: r.phone, relationship: 'Parent', smsOptIn: true }],
+              address: '',
+              createdAt: when,
+            }
+            families.push(fam)
+            counts.families++
+          }
+          let kid = sailors.find((k) => k.familyId === fam!.id && k.firstName.toLowerCase() === r.firstName.toLowerCase())
+          if (!kid) {
+            kid = { id: uid('s'), familyId: fam.id, firstName: r.firstName, lastName: r.lastName, dob: r.dob ?? '2016-01-01', level: r.level, shirtSize: 'YM', medicalAlerts: [] }
+            sailors.push(kid)
+            counts.sailors++
+          }
+          if (!registrations.some((x) => x.sailorId === kid!.id && x.sessionId === r.sessionId && x.status !== 'cancelled')) {
+            registrations.push({ id: uid('r'), sailorId: kid.id, sessionId: r.sessionId, status: r.status, createdAt: when, price: 0, priceLines: [], paid: 0 })
+            counts.registrations++
+          }
+        }
+        set({
+          families,
+          sailors,
+          registrations,
+          events: [event('registered', `Imported ${counts.registrations} registrations (${counts.sailors} new sailors, ${counts.families} new families)`), ...s.events],
+        })
+        return counts
+      },
 
       processWaitlists: () => set((s) => runWaitlist(s)),
 
@@ -294,7 +448,7 @@ export const useStore = create<State & Actions>()(
           programs: PROGRAMS,
           terms: TERMS,
           existing: s.registrations.filter((r) => famSailorIds.has(r.sailorId)),
-          now: new Date(),
+          now: clockNow(),
         })
         let registrations = [...s.registrations]
         const events: ActivityEvent[] = []
@@ -316,7 +470,7 @@ export const useStore = create<State & Actions>()(
             sailorId: item.sailorId,
             sessionId: item.sessionId,
             status,
-            createdAt: new Date().toISOString(),
+            createdAt: clockNow().toISOString(),
             price: item.total,
             priceLines: item.lines,
             paid: hasSeat ? item.total : 0,
@@ -385,7 +539,7 @@ export const useStore = create<State & Actions>()(
                 (x) =>
                   !(x.templateId === sub.templateId && x.season === sub.season && x.familyId === sub.familyId && x.sailorId === sub.sailorId)
               ),
-              { ...sub, id: uid('fs'), signedAt: new Date().toISOString() },
+              { ...sub, id: uid('fs'), signedAt: clockNow().toISOString() },
             ],
             events: [
               event('form-signed', `${sub.signedBy} signed a form for ${t ? t.firstName : `the ${fam?.name} family`}`),
@@ -422,7 +576,7 @@ export const useStore = create<State & Actions>()(
             ...s.events,
           ],
         }))
-        set((s) => runWaitlist(s, [r.sessionId]))
+        // Waitlists run in the club's registration system, so nothing is offered automatically here.
       },
 
       offerSpot: (id) =>
@@ -430,7 +584,7 @@ export const useStore = create<State & Actions>()(
           const r = s.registrations.find((x) => x.id === id)!
           const sailor = s.sailors.find((x) => x.id === r.sailorId)!
           const session = s.sessions.find((x) => x.id === r.sessionId)!
-          const expires = new Date(Date.now() + s.settings.waitlist.holdHours * 3600000).toISOString()
+          const expires = new Date(clockNow().getTime() + s.settings.waitlist.holdHours * 3600000).toISOString()
           return {
             registrations: s.registrations.map((x) =>
               x.id === id ? { ...x, status: 'offered', offerExpiresAt: expires } : x
@@ -517,7 +671,7 @@ export const useStore = create<State & Actions>()(
           a.audience.kind === 'staff'
             ? s.coaches.length
             : audienceFamilyIds(a.audience, s, s.settings.season).length
-        const full: Announcement = { ...a, id: uid('a'), sentAt: new Date().toISOString(), recipients, opened: 0 }
+        const full: Announcement = { ...a, id: uid('a'), sentAt: clockNow().toISOString(), recipients, opened: 0 }
         set({
           announcements: [full, ...s.announcements],
           events: [event('announcement', `“${a.title}” sent to ${recipients} ${a.audience.kind === 'staff' ? 'staff' : 'families'} by ${a.channels.join(' + ')}`), ...s.events],
@@ -531,7 +685,7 @@ export const useStore = create<State & Actions>()(
           body: 'Your sailor is still missing one or more season forms. It takes about a minute from your phone in Burgee, and sailors need them on file before their next session.',
           category: 'reminder',
           audience: { kind: 'families', familyIds, label: 'Families with forms due' },
-          channels: ['email', 'sms'],
+          channels: ['push', 'email'],
           sentBy: 'Jordan Hale',
         })
       },
@@ -539,7 +693,7 @@ export const useStore = create<State & Actions>()(
       sendFormRequest: (r) =>
         set((s) => {
           const template = [...s.customTemplates, ...FORM_TEMPLATES].find((t) => t.id === r.templateId)
-          const req: FormRequest = { ...r, id: uid('req'), sentAt: new Date().toISOString() }
+          const req: FormRequest = { ...r, id: uid('req'), sentAt: clockNow().toISOString() }
           const ann: Announcement = {
             id: uid('a'),
             title: `Please sign: ${template?.name ?? 'a form'}`,
@@ -568,7 +722,7 @@ export const useStore = create<State & Actions>()(
       markAttendance: (date, sessionId, sailorIds, status, extra) =>
         set((s) => {
           const attendance = { ...s.attendance }
-          const nowIso = new Date().toISOString()
+          const nowIso = clockNow().toISOString()
           for (const sid of sailorIds) {
             const key = attendanceKey(date, sessionId, sid)
             const prev = attendance[key]
@@ -607,7 +761,7 @@ export const useStore = create<State & Actions>()(
           const ct = CERT_TYPES.find((c) => c.id === certTypeId)!
           const expires = format(addMonths(new Date(`${issued}T12:00:00`), ct.validMonths), 'yyyy-MM-dd')
           const doc: ClubDocument[] = file
-            ? [{ id: uid('doc'), title: ct.name, kind: 'certification', coachId, certTypeId, expires, uploadedAt: new Date().toISOString(), ...file }]
+            ? [{ id: uid('doc'), title: ct.name, kind: 'certification', coachId, certTypeId, expires, uploadedAt: clockNow().toISOString(), ...file }]
             : []
           return {
             coaches: s.coaches.map((c) =>
@@ -645,12 +799,12 @@ export const useStore = create<State & Actions>()(
           return { formerCoaches: s.formerCoaches.filter((c) => c.id !== id), coaches: [...s.coaches, { ...coach, active: true }] }
         }),
 
-      addDocument: (d) => set((s) => ({ documents: [{ ...d, id: uid('doc'), uploadedAt: new Date().toISOString() }, ...s.documents] })),
+      addDocument: (d) => set((s) => ({ documents: [{ ...d, id: uid('doc'), uploadedAt: clockNow().toISOString() }, ...s.documents] })),
       removeDocument: (id) => set((s) => ({ documents: s.documents.filter((d) => d.id !== id) })),
 
       callPractice: (sessionIds, date, status, note, by) => {
         const s = get()
-        const now = new Date().toISOString()
+        const now = clockNow().toISOString()
         const keep = s.practiceCalls.filter((c) => !(c.date === date && sessionIds.includes(c.sessionId)))
         const calls: PracticeCall[] = sessionIds.map((sessionId) => ({ sessionId, date, status, note: note || undefined, postedAt: now, by }))
         set({ practiceCalls: [...keep, ...calls] })
@@ -663,11 +817,13 @@ export const useStore = create<State & Actions>()(
         const label = names.length > 2 ? 'All teams' : names.join(' and ')
         const word = status === 'on' ? 'is on' : status === 'delayed' ? 'is delayed' : 'is cancelled'
         return get().sendAnnouncement({
-          title: `${label}: practice ${word} ${date === format(new Date(), 'yyyy-MM-dd') ? 'today' : `on ${format(new Date(`${date}T12:00:00`), 'EEE, MMM d')}`}`,
+          title: `${label}: practice ${word} ${date === format(clockNow(), 'yyyy-MM-dd') ? 'today' : `on ${format(new Date(`${date}T12:00:00`), 'EEE, MMM d')}`}`,
           body: note || (status === 'on' ? 'See you at the dock.' : status === 'delayed' ? 'We’ll post an update within the hour.' : 'Stay safe. We’ll see you next practice.'),
           category: status === 'on' ? 'schedule' : 'weather',
+          urgent: status !== 'on',
           audience: { kind: 'families', familyIds, label },
-          channels: ['email', 'sms'],
+          // Cancellations and delays are urgent, so they also go out by text.
+          channels: status === 'on' ? ['push', 'email'] : ['push', 'sms', 'email'],
           sentBy: by,
         })
       },
@@ -675,7 +831,7 @@ export const useStore = create<State & Actions>()(
       saveLessonPlan: (p) =>
         set((s) => {
           const existing = p.id ? s.lessonPlans.find((x) => x.id === p.id) : s.lessonPlans.find((x) => x.sessionId === p.sessionId && x.date === p.date)
-          const full: LessonPlan = { ...p, id: existing?.id ?? uid('lp'), updatedAt: new Date().toISOString() }
+          const full: LessonPlan = { ...p, id: existing?.id ?? uid('lp'), updatedAt: clockNow().toISOString() }
           return { lessonPlans: existing ? s.lessonPlans.map((x) => (x.id === existing.id ? full : x)) : [...s.lessonPlans, full] }
         }),
 
@@ -694,7 +850,7 @@ export const useStore = create<State & Actions>()(
       markSkill: (sailorId, skillId, status, by) =>
         set((s) => {
           const rest = s.skillMarks.filter((m) => !(m.sailorId === sailorId && m.skillId === skillId))
-          return { skillMarks: status ? [...rest, { sailorId, skillId, status, by, date: format(new Date(), 'yyyy-MM-dd') }] : rest }
+          return { skillMarks: status ? [...rest, { sailorId, skillId, status, by, date: format(clockNow(), 'yyyy-MM-dd') }] : rest }
         }),
 
       saveEvaluation: (e) =>
@@ -717,7 +873,7 @@ export const useStore = create<State & Actions>()(
         set((s) => ({
           regattaResponses: [
             ...s.regattaResponses.filter((x) => !(x.eventId === r.eventId && x.sailorId === r.sailorId)),
-            { ...r, updatedAt: new Date().toISOString() },
+            { ...r, updatedAt: clockNow().toISOString() },
           ],
         })),
 
@@ -747,7 +903,7 @@ export const useStore = create<State & Actions>()(
           const fam = s.families.find((f) => f.id === familyId)
           return {
             registrations: s.registrations.map((r) => (registrationIds.includes(r.id) ? { ...r, status: r.status === 'pending-payment' ? 'confirmed' : r.status, paid: r.price } : r)),
-            ledger: [{ id: uid('pay'), at: new Date().toISOString(), familyId, registrationIds, amount, method, memo, recordedBy: 'Jordan Hale' }, ...s.ledger],
+            ledger: [{ id: uid('pay'), at: clockNow().toISOString(), familyId, registrationIds, amount, method, memo, recordedBy: 'Jordan Hale' }, ...s.ledger],
             events: [event('payment', `${method === 'check' ? 'Check' : 'Cash'} payment recorded for the ${fam?.name} family · $${amount.toLocaleString()}`), ...s.events],
           }
         }),
@@ -755,7 +911,7 @@ export const useStore = create<State & Actions>()(
     {
       name: 'burgee-demo-v1',
       storage: createJSONStorage(() => safeStorage),
-      version: 4,
+      version: 5,
       // Demo data shape changed: start older saved demos fresh.
       migrate: () => fresh() as never,
     }

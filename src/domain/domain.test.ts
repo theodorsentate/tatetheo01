@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CERT_TYPES, DEFAULT_SETTINGS, PROGRAMS, TERMS } from '@/data/catalog'
 import { createSeed } from '@/data/seed'
+import { demoStart } from '@/lib/clock'
 import { quoteCart } from './pricing'
 import { autoGroups, certStatus, coachCertRows, eligibility, groupLoad } from './rules'
 import type { Family, Registration, Sailor, Session } from './types'
@@ -47,7 +48,7 @@ const reg = (id: string, sailorId: string, sessionId: string, status: Registrati
   paid: 0,
 })
 
-const ctx = (family: Family, sessions: Session[], sailors: Sailor[], existing: Registration[] = [], now = new Date('2026-10-22T12:00:00')) => ({
+const ctx = (family: Family, sessions: Session[], sailors: Sailor[], existing: Registration[] = [], now = new Date('2027-02-01T12:00:00')) => ({
   pricing: DEFAULT_SETTINGS.pricing,
   family,
   sailors,
@@ -63,10 +64,11 @@ describe('pricing', () => {
     const s = [session('w1')]
     const m = quoteCart([{ sailorId: 'a', sessionId: 'w1' }], ctx(fam('member'), s, [sailor('a')]))
     const n = quoteCart([{ sailorId: 'a', sessionId: 'w1' }], ctx(fam('non-member'), s, [sailor('a')]))
-    expect(m.subtotal).toBe(450)
-    expect(n.subtotal).toBe(575)
-    // 10% early bird before Jan 31
-    expect(m.total).toBe(405)
+    const tier = DEFAULT_SETTINGS.pricing.tiers.find((t) => t.id === 'tier-camp')!
+    expect(m.subtotal).toBe(tier.member)
+    expect(n.subtotal).toBe(tier.nonMember)
+    // 10% early bird before Mar 31
+    expect(m.total).toBe(tier.member * 0.9)
   })
 
   it('applies sibling and multi-week discounts', () => {
@@ -76,11 +78,12 @@ describe('pricing', () => {
       ...s.map((x) => ({ sailorId: 'a', sessionId: x.id })),
       { sailorId: 'b', sessionId: 'w1' },
     ]
-    const q = quoteCart(items, ctx(fam('member'), s, kids, [], new Date('2027-03-01T12:00:00')))
+    const q = quoteCart(items, ctx(fam('member'), s, kids, [], new Date('2027-04-15T12:00:00')))
+    const rate = DEFAULT_SETTINGS.pricing.tiers.find((t) => t.id === 'tier-camp')!.member
     // a: 4 weeks → 5% multi-week each; b: sibling 10%
-    expect(q.items[0].total).toBe(427.5)
-    expect(q.items[4].total).toBe(405)
-    expect(q.total).toBe(427.5 * 4 + 405)
+    expect(q.items[0].total).toBe(rate * 0.95)
+    expect(q.items[4].total).toBe(rate * 0.9)
+    expect(q.total).toBe(rate * 0.95 * 4 + rate * 0.9)
   })
 
   it('treats an earlier-registered sibling as the first child', () => {
@@ -123,9 +126,9 @@ describe('waitlist', () => {
 
   it('blocks non-members during the member window', () => {
     const summer = TERMS.find((t) => t.id === 'summer-27')!
-    expect(registrationWindow(summer, fam('non-member'), new Date('2026-10-22')).open).toBe(false)
-    expect(registrationWindow(summer, fam('member'), new Date('2026-10-22')).open).toBe(true)
-    expect(registrationWindow(summer, fam('non-member'), new Date('2026-11-02')).open).toBe(true)
+    expect(registrationWindow(summer, fam('non-member'), new Date('2027-02-01')).open).toBe(false)
+    expect(registrationWindow(summer, fam('member'), new Date('2027-02-01')).open).toBe(true)
+    expect(registrationWindow(summer, fam('non-member'), new Date('2027-02-16')).open).toBe(true)
   })
 })
 
@@ -169,23 +172,29 @@ describe('eligibility, certs, rosters', () => {
 })
 
 describe('demo seed', () => {
-  const seed = createSeed(new Date('2026-10-22T09:00:00'))
+  const seed = createSeed(demoStart())
 
   it('never overbooks a session', () => {
     for (const s of seed.sessions) {
-      const taken = seed.registrations.filter(
-        (r) => r.sessionId === s.id && ['confirmed', 'pending-payment', 'offered'].includes(r.status)
-      ).length
+      const taken = seed.registrations.filter((r) => r.sessionId === s.id && ['confirmed', 'pending-payment', 'offered'].includes(r.status)).length
       expect(taken, s.id).toBeLessThanOrEqual(s.capacity)
     }
   })
 
   it('sets up the Calloway family story', () => {
     const finn = seed.registrations.filter((r) => r.sailorId === 's-finn')
-    expect(finn.some((r) => r.status === 'offered' && r.offerExpiresAt)).toBe(true)
-    expect(finn.some((r) => r.status === 'pending-payment')).toBe(true)
-    const g3 = waitlistFor('green-camp-w3', seed.registrations, seed.sailors, seed.families, DEFAULT_SETTINGS.waitlist)
-    expect(g3.findIndex((r) => r.sailorId === 's-hazel')).toBe(1)
+    expect(finn.find((r) => r.sessionId === 'rwb-camp-w6')?.status).toBe('waitlisted')
+    expect(finn.some((r) => r.status === 'offered' || r.status === 'pending-payment')).toBe(false)
+    const g7 = waitlistFor('green-camp-w7', seed.registrations, seed.sailors, seed.families, DEFAULT_SETTINGS.waitlist)
+    expect(g7.findIndex((r) => r.sailorId === 's-hazel')).toBe(1)
+    expect(seed.dayNotes.some((d) => d.sailorId === 's-hazel' && d.kind === 'pickup')).toBe(true)
+  })
+
+  it('gives the teen sailor a login and copies her parents on her coach thread', () => {
+    expect(seed.sailors.find((k) => k.id === 's-lucy')?.login).toBeTruthy()
+    const lucyThreads = seed.threads.filter((t) => t.participants.includes('sailor:s-lucy'))
+    expect(lucyThreads.length).toBeGreaterThan(0)
+    expect(lucyThreads.every((t) => t.participants.includes('family:f-reyes'))).toBe(true)
   })
 
   it('has realistic volume', () => {

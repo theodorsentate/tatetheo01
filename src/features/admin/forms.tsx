@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Main } from '@/components/layout/main'
 import { FleetChip, PageHeader } from '@/components/burgee/marks'
 import { SendFormDialog } from './send-form'
+import { now as clockNow } from '@/lib/clock'
 
 export function AdminForms() {
   const regs = useStore((s) => s.registrations)
@@ -99,7 +100,7 @@ export function AdminForms() {
               if (!t) return null
               const p = requestProgress(r, t, submissions, season)
               const pct = p.total ? Math.round((p.done / p.total) * 100) : 0
-              const late = r.dueDate && r.dueDate < format(new Date(), 'yyyy-MM-dd') && p.done < p.total
+              const late = r.dueDate && r.dueDate < format(clockNow(), 'yyyy-MM-dd') && p.done < p.total
               const unsignedSailors = r.sailorIds.filter((sid) => !submissions.some((s) => s.templateId === t.id && s.season === season && s.sailorId === sid))
               const unsignedFamilies =
                 t.scope === 'family'

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { format, formatDistanceToNowStrict } from 'date-fns'
+import { format, formatDistanceStrict } from 'date-fns'
 import { CloudLightning, Mail, MessageSquare, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -8,7 +8,7 @@ import { programById, useLookups } from '@/data/hooks'
 import { audienceFamilyIds, useStore } from '@/data/store'
 import type { Announcement, Audience, Channel } from '@/domain/types'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Main } from '@/components/layout/main'
 import { PageHeader } from '@/components/burgee/marks'
 import { useAsk } from '@/assistant/ask-store'
+import { now as clockNow } from '@/lib/clock'
 
 const TEMPLATES: { id: Announcement['category']; label: string; title: string; body: string }[] = [
   {
@@ -73,7 +74,9 @@ export function AdminMessages({ sessionId }: { sessionId?: string }) {
     if (draft) useAsk.getState().set({ draft: undefined })
   }, [draft])
   const [audience, setAudience] = useState<Audience>(draft?.audience ?? (sessionId ? { kind: 'session', sessionId } : { kind: 'everyone' }))
-  const [channels, setChannels] = useState<Channel[]>(draft?.channels ?? ['email', 'sms'])
+  // Everyone gets an app notification and an email; urgent messages also go out by text.
+  const [urgent, setUrgent] = useState<boolean>(draft ? draft.channels.includes('sms') : false)
+  const channels: Channel[] = urgent ? ['push', 'email', 'sms'] : ['push', 'email']
   const [category, setCategory] = useState<Announcement['category']>(draft?.category ?? 'general')
   const [title, setTitle] = useState(draft?.title ?? '')
   const [body, setBody] = useState(draft?.body ?? '')
@@ -96,22 +99,19 @@ export function AdminMessages({ sessionId }: { sessionId?: string }) {
       toast.error('Add a subject and a message before sending.')
       return
     }
-    if (!channels.length) {
-      toast.error('Pick email, text, or both.')
-      return
-    }
-    const n = state.sendAnnouncement({ title, body, category, audience, channels, sentBy: 'Jordan Hale' })
+    const n = state.sendAnnouncement({ title, body, category, audience, channels, urgent, sentBy: 'Jordan Hale' })
     toast.success(`Sent to ${n} ${audience.kind === 'staff' ? 'staff' : 'families'}`)
     setTitle('')
     setBody('')
     setCategory('general')
+    setUrgent(false)
   }
 
   return (
     <Main>
       <PageHeader
-        title='Messages'
-        description='Email and text families by team, week or everyone. Texts go to guardians who opted in.'
+        title='Announcements'
+        description='Tell families by team, week or everyone. They get an app notification and an email; mark it urgent to text them too.'
       />
       {draft && (
         <p className='mb-4 rounded-lg border border-signal/40 bg-signal-soft px-4 py-2.5 text-sm'>
@@ -133,7 +133,7 @@ export function AdminMessages({ sessionId }: { sessionId?: string }) {
                   setCategory(t.id)
                   setTitle(t.title)
                   setBody(t.body)
-                  if (t.id === 'weather') setChannels(['email', 'sms'])
+                  setUrgent(t.id === 'weather')
                 }}
               >
                 {t.id === 'weather' && <CloudLightning className='size-4' />}
@@ -152,7 +152,6 @@ export function AdminMessages({ sessionId }: { sessionId?: string }) {
                   <SelectGroup>
                     <SelectItem value={encode({ kind: 'everyone' })}>All families</SelectItem>
                     <SelectItem value={encode({ kind: 'outstanding-forms' })}>Families with forms due</SelectItem>
-                    <SelectItem value={encode({ kind: 'waitlisted' })}>Families on a waitlist</SelectItem>
                     <SelectItem value={encode({ kind: 'staff' })}>Coaches & staff</SelectItem>
                   </SelectGroup>
                   <SelectGroup>
@@ -181,20 +180,13 @@ export function AdminMessages({ sessionId }: { sessionId?: string }) {
                 {channels.includes('sms') && `, ${smsReach} by text`}.
               </p>
             </div>
-            <fieldset className='grid gap-1.5'>
-              <legend className='mb-1.5 text-sm font-medium'>Send by</legend>
-              <div className='flex gap-5 text-sm'>
-                {(['email', 'sms'] as Channel[]).map((c) => (
-                  <label key={c} className='flex items-center gap-2'>
-                    <Checkbox
-                      checked={channels.includes(c)}
-                      onCheckedChange={(v) => setChannels(v ? [...channels, c] : channels.filter((x) => x !== c))}
-                    />
-                    {c === 'email' ? 'Email' : 'Text message'}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <label className='flex items-start gap-3 rounded-md border px-3 py-2.5'>
+              <Switch checked={urgent} onCheckedChange={setUrgent} className='mt-0.5' />
+              <span className='text-sm'>
+                <span className='block font-medium'>Urgent: also send a text</span>
+                <span className='text-xs text-muted-foreground'>For weather calls and same-day changes. Everything else is an app notification and an email.</span>
+              </span>
+            </label>
             <div className='grid gap-1.5'>
               <Label htmlFor='subject'>Subject</Label>
               <Input id='subject' value={title} onChange={(e) => setTitle(e.target.value)} placeholder='Saturday practice moves to 10 AM' />
@@ -245,15 +237,16 @@ export function AdminMessages({ sessionId }: { sessionId?: string }) {
                 <p className='flex flex-wrap items-center gap-2 font-medium'>
                   {a.category === 'weather' && <CloudLightning className='size-4 text-signal' aria-label='Weather' />}
                   {a.title}
+                  {a.urgent && <span className='rounded bg-destructive/10 px-1.5 py-0.5 text-[11px] font-semibold text-destructive'>Urgent</span>}
                 </p>
                 <p className='line-clamp-1 text-sm text-muted-foreground'>{a.body}</p>
                 <p className='mt-1 text-xs text-muted-foreground'>
-                  {audienceLabel(a.audience, look)}, by {a.channels.map((c) => (c === 'sms' ? 'text' : c)).join(' and ')}. Sent by {a.sentBy}.
+                  {audienceLabel(a.audience, look)}, by {a.channels.map((c) => (c === 'sms' ? 'text' : c === 'push' ? 'app' : c)).join(', ')}. Sent by {a.sentBy}.
                 </p>
               </div>
               <div className='text-sm sm:text-end'>
                 <time dateTime={a.sentAt} title={format(new Date(a.sentAt), 'PPpp')} className='text-muted-foreground'>
-                  {formatDistanceToNowStrict(new Date(a.sentAt), { addSuffix: true })}
+                  {formatDistanceStrict(new Date(a.sentAt), clockNow(), { addSuffix: true })}
                 </time>
                 <p className={cn('text-xs', a.opened ? 'text-foreground' : 'text-muted-foreground')}>
                   {a.opened ? `${Math.round((a.opened / a.recipients) * 100)}% opened of ${a.recipients}` : `Delivering to ${a.recipients}`}

@@ -6,19 +6,29 @@ import { ROLES } from '@/components/burgee/role-switcher'
 
 const TRY: Record<string, string[]> = {
   director: [
-    'Call off today’s practice and text every family in one tap.',
-    'See who’s going to the Fall Championship and who needs a chaperone.',
-    'Ask Burgee “who still needs their SafeSport?”',
+    'Call the afternoon groups in for lightning and text every family in one tap.',
+    'Approve coach evaluations before families see them.',
+    'Answer a parent in the inbox, or ask Burgee “who still needs their SafeSport?”',
   ],
   coach: [
-    'Take attendance for the Green Team, from check-in to pickup.',
-    'Open today’s plan and assign boats.',
-    'Tick off Hazel’s skills and write her evaluation.',
+    'Check in Green A and launch them, with swim checks built in.',
+    'See which kids are out today and who is picking up whom.',
+    'Open the emergency card for your group.',
   ],
   family: [
-    'See if practice is on and whether Finn is on the water.',
-    'Tell the coaches Hazel is going to the Turkey Bowl.',
-    'Read Finn’s evaluation from his coach.',
+    'See that Hazel is on the water, and who’s in her group.',
+    'Tell the coaches Grandma is picking up today, in two taps.',
+    'Message Hazel’s coach about the Harbor Island regatta.',
+  ],
+  sailor: [
+    'See today’s plan and your coach’s evaluation.',
+    'Message your coach. Your parents are copied automatically.',
+    'Track your skills toward the next level.',
+  ],
+  committee: [
+    'The season at a glance: sailors, attendance, safety.',
+    'No names, phone numbers or medical details.',
+    'Everything Burgee handled for families this summer.',
   ],
 }
 
@@ -61,11 +71,13 @@ function Glimpse({ role }: { role: string }) {
     return (
       <ul className='space-y-1.5' aria-hidden='true'>
         {[
-          ['Opti Green Team', 'On'],
-          ['Opti Race Team', 'On'],
-        ].map(([n, st]) => (
+          ['Opti Green Camp', 'On', 'AM'],
+          ['Opti Race Camp', 'On', 'PM'],
+        ].map(([n, st, slot]) => (
           <li key={n} className='flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-xs'>
-            <span className='font-medium text-foreground'>{n}</span>
+            <span className='font-medium text-foreground'>
+              {n} <span className='font-normal text-muted-foreground'>{slot}</span>
+            </span>
             <span className='flex gap-1 text-[10px]'>
               <span className='rounded bg-ok-soft px-1.5 py-0.5 font-medium text-ok'>{st}</span>
               <span className='px-1.5 py-0.5 text-muted-foreground'>Delayed</span>
@@ -73,7 +85,7 @@ function Glimpse({ role }: { role: string }) {
             </span>
           </li>
         ))}
-        <li className='rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground'>Fall Championship: 22 going, 3 interested</li>
+        <li className='rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground'>6 evaluations waiting for your approval</li>
       </ul>
     )
   }
@@ -81,26 +93,51 @@ function Glimpse({ role }: { role: string }) {
     return (
       <div className='rounded-md border border-ok/30 bg-ok-soft p-2.5 text-xs' aria-hidden='true'>
         <p className='font-display text-sm font-semibold text-ok'>Practice is on</p>
-        <p className='mt-0.5 text-foreground'>Opti Race Team, 3:45–6:00 PM</p>
-        <p className='mt-2 rounded bg-signal-soft px-2 py-1 font-medium text-signal'>Finn is on the water (since 4:02)</p>
+        <p className='mt-0.5 text-foreground'>Opti Green Camp, 9:00 AM – 12:00 PM</p>
+        <p className='mt-2 rounded bg-signal-soft px-2 py-1 font-medium text-signal'>Hazel is on the water (since 9:38)</p>
       </div>
     )
   }
   if (role === 'coach') {
     const rows: [string, string, string][] = [
       ['Hazel C.', 'On the water', 'bg-signal-soft text-signal'],
-      ['Finn C.', 'Checked in', 'bg-secondary text-secondary-foreground'],
-      ['Knox B.', 'Went home', 'bg-ok-soft text-ok'],
+      ['Wren D.', 'Out today (parent)', 'bg-muted text-muted-foreground'],
+      ['Ava H.', 'Checked in', 'bg-secondary text-secondary-foreground'],
     ]
     return (
       <ul className='space-y-1.5' aria-hidden='true'>
-        {rows.map(([n, s, c]) => (
+        {rows.map(([n, st, c]) => (
           <li key={n} className='flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-xs'>
             <span className='font-medium text-foreground'>{n}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${c}`}>{s}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${c}`}>{st}</span>
           </li>
         ))}
       </ul>
+    )
+  }
+  if (role === 'sailor') {
+    return (
+      <div className='rounded-md border border-border bg-card p-2.5 text-xs' aria-hidden='true'>
+        <p className='text-muted-foreground'>Today’s plan</p>
+        <p className='font-medium text-foreground'>Camp afternoon: speed and shifts</p>
+        <p className='mt-2 rounded bg-ok-soft px-2 py-1 text-ok'>Parents copied on coach messages</p>
+      </div>
+    )
+  }
+  if (role === 'committee') {
+    return (
+      <dl className='grid grid-cols-3 gap-1.5 text-center text-xs' aria-hidden='true'>
+        {[
+          ['Sailors', '190'],
+          ['Attendance', '94%'],
+          ['Staff certified', '12/14'],
+        ].map(([l, v]) => (
+          <div key={l} className='rounded-md border border-border bg-card px-1 py-1.5'>
+            <dd className='font-display text-base font-semibold text-heading'>{v}</dd>
+            <dt className='text-[10px] text-muted-foreground'>{l}</dt>
+          </div>
+        ))}
+      </dl>
     )
   }
   return null
@@ -129,12 +166,13 @@ export function Welcome() {
       <main className='mx-auto max-w-6xl px-4 pb-16 sm:px-8'>
         <h1 className='max-w-[18ch] text-4xl leading-[1.05] font-semibold sm:text-6xl'>Your junior sailing program, in one place.</h1>
         <p className='mt-5 max-w-[60ch] text-base leading-relaxed text-muted-foreground sm:text-lg'>
-          Practice calls, attendance, lesson plans, skills, regattas, forms and payments, shared by the program director,
-          coaches and parents. This demo is a made-up club on a Thursday in late October: two fall teams practice this afternoon.
+          Practice calls, attendance, lesson plans, skills, messages, regattas and forms, shared by the program director,
+          coaches, parents and older sailors. This demo is a made-up club on a Wednesday in July, week 5 of summer camp,
+          with the morning groups on the water.
         </p>
 
         <h2 className='mt-12 mb-4 text-sm font-medium text-muted-foreground'>Pick a seat</h2>
-        <div className='grid gap-5 md:grid-cols-3'>
+        <div className='grid gap-5 md:grid-cols-2 lg:grid-cols-3'>
           {ROLES.map((r) => (
             <button
               key={r.role}
@@ -153,7 +191,7 @@ export function Welcome() {
                     <span className='block font-display text-xl font-semibold text-heading'>{r.label}</span>
                     <span className='text-sm text-muted-foreground'>
                       as {r.who}
-                      {r.role === 'director' ? ', on a laptop' : ', on a phone'}
+                      {r.role === 'director' || r.role === 'committee' ? ', on a laptop' : ', on a phone'}
                     </span>
                   </span>
                   <ArrowUpRight className='size-5 text-muted-foreground transition-colors group-hover:text-primary' />
@@ -171,7 +209,7 @@ export function Welcome() {
           ))}
         </div>
         <p className='mt-8 text-xs text-muted-foreground'>
-          All names and data are fictional. Changes you make are saved in this browser; reset them any time from the view switcher.
+          All names and data are fictional. Changes you make are saved in this browser. The view switcher can reset them, or jump to the afternoon when the PM groups sail.
         </p>
       </main>
     </div>

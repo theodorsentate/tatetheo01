@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
-import { EvaluationForm, SkillBar, SkillChecklist, skillProgress } from '@/components/burgee/skills'
+import { EVAL_LABEL, EvaluationForm, SkillBar, SkillChecklist, skillProgress } from '@/components/burgee/skills'
 
 /** Start time of a session's weekday practice, e.g. "3:45" → Date on `date`. */
 function startOf(session: Session, date: string) {
@@ -291,7 +291,7 @@ export function SkillsTab({ session, group, coachId, coachName }: { session: Ses
                     <span>
                       {p.got} of {p.total} {TRACKS[p.track].short} skills
                     </span>
-                    <span className={cn(ev?.shared && 'text-ok', !ev && 'text-signal')}>{ev ? (ev.shared ? 'Evaluation shared' : 'Draft') : 'No evaluation'}</span>
+                    <span className={cn(ev?.status === 'shared' && 'text-ok', !ev && 'text-signal')}>{ev ? EVAL_LABEL[ev.status] : 'No evaluation'}</span>
                   </span>
                 </span>
                 <ChevronRight className='size-4 text-muted-foreground' />
@@ -320,8 +320,8 @@ export function SkillsTab({ session, group, coachId, coachName }: { session: Ses
                       {evalFor(open.id) ? (
                         <>
                           <p className='flex items-center gap-1.5 text-sm font-medium'>
-                            {evalFor(open.id)!.shared && <Check className='size-4 text-ok' />}
-                            Evaluation {evalFor(open.id)!.shared ? 'shared' : 'saved as a draft'}, {format(new Date(`${evalFor(open.id)!.date}T12:00:00`), 'MMM d')}
+                            {evalFor(open.id)!.status === 'shared' && <Check className='size-4 text-ok' />}
+                            {EVAL_LABEL[evalFor(open.id)!.status]}, {format(new Date(`${evalFor(open.id)!.date}T12:00:00`), 'MMM d')}
                           </p>
                           <p className='mt-1 line-clamp-2 text-sm text-muted-foreground'>{evalFor(open.id)!.strengths}</p>
                           <Button variant='outline' size='sm' className='mt-2' onClick={() => setWriting(true)}>

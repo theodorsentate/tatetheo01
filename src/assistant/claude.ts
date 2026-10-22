@@ -26,7 +26,8 @@ import {
   staffDirectoryInfo,
   formRequestsInfo,
   formsInfo,
-  moneyInfo,
+  inboxInfo,
+  parentNotesInfo,
   swimChecksInfo,
   resolveAudience,
   rostersInfo,
@@ -35,6 +36,7 @@ import {
   staffCertifications,
   waitlistInfo,
 } from './query'
+import { now as clockNow } from '@/lib/clock'
 
 /* Minimal typing of the runtime we call (see the artifact capability contract). */
 type SampleTool = {
@@ -70,7 +72,7 @@ export function getClaude(): Promise<SampleFn | null> {
   return samplePromise
 }
 
-export const ctxNow = (): Ctx => ({ s: useStore.getState(), now: new Date() })
+export const ctxNow = (): Ctx => ({ s: useStore.getState(), now: clockNow() })
 
 const str = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : String(v))
 const scope = {
@@ -88,7 +90,8 @@ const LABELS: Record<string, string> = {
   waitlists: 'Reading waitlists',
   sailors: 'Looking up sailors',
   family: 'Looking up the family',
-  money: 'Checking balances',
+  inbox: 'Checking the inbox',
+  parent_notes: 'Checking parent notes',
   rosters: 'Checking rosters and coaches',
   forms: 'Checking forms',
   attendance: 'Checking attendance',
@@ -127,7 +130,7 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
     },
     {
       name: 'sessions',
-      description: 'Capacity for camp weeks and team seasons: capacity, taken, spotsLeft, waitlist and offers out, with an href per session. Filter by program/term/week, and optionally only full, open or waitlisted sessions.',
+      description: 'Camp weeks and team seasons as imported from the club’s registration system: capacity, sailors signed up, spots left, waitlist, with an href per session. Filter by program/term/week, and optionally only full, open or waitlisted sessions.',
       inputSchema: { type: 'object', properties: { ...scope, filter: { type: 'string', enum: ['all', 'full', 'open', 'waitlist'] } } },
       execute: wrap('sessions', (i) => sessionsInfo(ctxNow(), { program: str(i.program), term: str(i.term), week: str(i.week), filter: str(i.filter) })),
     },
@@ -164,14 +167,21 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
     },
     {
       name: 'family',
-      description: 'One family by last name or a guardian name: guardians with phone/email, kids, registrations, balance due, missing forms, and an href.',
+      description: 'One family by last name or a guardian name: guardians with phone/email, kids, the weeks they are signed up for, missing forms, and an href.',
       inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
       execute: wrap('family', (i) => familyInfo(ctxNow(), { name: String(i.name ?? '') })),
     },
     {
-      name: 'money',
-      description: 'Unpaid balances by family (largest first) and tuition booked vs collected per term.',
-      execute: wrap('money', () => moneyInfo(ctxNow())),
+      name: 'inbox',
+      description: 'Conversations between families, coaches, sailors and the director: which are waiting for the director to reply, and recent threads with the last message. Optional search text.',
+      inputSchema: { type: 'object', properties: { search: { type: 'string' } } },
+      execute: wrap('inbox', (i) => inboxInfo(ctxNow(), { search: str(i.search) })),
+    },
+    {
+      name: 'parent_notes',
+      description: 'What parents told the coaches about a day: sailor is out, running late, leaving early, or someone else is picking up. Defaults to today; date "upcoming" for today and later, or a yyyy-mm-dd date.',
+      inputSchema: { type: 'object', properties: { date: { type: 'string' } } },
+      execute: wrap('parent_notes', (i) => parentNotesInfo(ctxNow(), { date: str(i.date) })),
     },
     {
       name: 'rosters',
@@ -235,7 +245,7 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
     },
     {
       name: 'progress',
-      description: 'Skill progress and coach evaluations for fall team sailors: skills got / total, ready to move up, working on, evaluation status. Filter by program or sailor name (sailor returns the evaluation text).',
+      description: 'Skill progress and coach evaluations for sailors in this week’s sessions: skills completed / total, ready to move up, working on, evaluation status, plus every evaluation waiting for the director’s approval. Filter by program or sailor name (sailor returns the evaluation text).',
       inputSchema: { type: 'object', properties: { program: { type: 'string' }, sailor: { type: 'string' } } },
       execute: wrap('progress', (i) => progressInfo(ctxNow(), { program: str(i.program), sailor: str(i.sailor) })),
     },
@@ -266,14 +276,14 @@ export function buildTools(onTool: (e: ToolEvent) => void, actions: AssistantAct
           audience: { type: 'string' },
           title: { type: 'string' },
           body: { type: 'string' },
-          sms: { type: 'boolean', description: 'Also send as a text' },
+          sms: { type: 'boolean', description: 'Urgent: also send as a text (weather calls and same-day changes only)' },
         },
         required: ['audience', 'title', 'body'],
       },
       execute: wrap('draft_message', (i) => {
         const ctx = ctxNow()
         const audience: Audience = resolveAudience(ctx, String(i.audience ?? 'everyone'))
-        const channels: Channel[] = i.sms === false ? ['email'] : ['email', 'sms']
+        const channels: Channel[] = i.sms === true ? ['push', 'email', 'sms'] : ['push', 'email']
         actions.push({ kind: 'draft', label: `Review draft to ${audienceText(audience, ctx)}`, title: String(i.title ?? ''), body: String(i.body ?? ''), audience, channels })
         return { status: 'Draft ready for the director to review. Nothing has been sent.', audience: audienceText(audience, ctx) }
       }),
@@ -287,7 +297,7 @@ export function instructions(ctx: Ctx) {
 Rules:
 - Use the tools to look things up. Never guess names, dates, counts or money; if the data doesn't cover it, say so in one line.
 - Lead with the answer in one short sentence, then a short "- " bullet list when naming people or sessions. Keep it tight: this is a quick chat, not a report.
-- Write dates like "Nov 10". Money like "$1,035".
+- Write dates like "Jul 14". Burgee does not handle payments or balances; if asked, say they live in the club's registration system.
 - When a tool result gives an href for a person, family, session or page, link it in Markdown: [Noah Fitzgerald](/admin/staff). Use only hrefs from tool results.
 - If the director asks you to remind, email, text or message people, call draft_message with a clear, friendly message from the program director, then tell them the draft is ready to review. Never say anything was sent.
 - Formatting: plain paragraphs, "- " bullets, **bold** and links only. No headings, no tables.
@@ -322,7 +332,8 @@ export async function askClaude(
     certifications: staffCertifications(ctx, { status: 'all' }).rows,
     sessions: sessionsInfo(ctx, {}).rows,
     waitlists: waitlistInfo(ctx, {}).sessions,
-    money: moneyInfo(ctx),
+    inbox: inboxInfo(ctx, {}),
+    parentNotes: parentNotesInfo(ctx, { date: 'upcoming' }),
     forms: formsInfo(ctx, {}),
     rosters: rostersInfo(ctx, {}).groups,
     sailors: sailorsInfo(ctx, { limit: 200 }).rows.map(({ name, age, fleet, family, medicalAlerts, formsMissing, registrations }) => ({ name, age, fleet, family, medicalAlerts, formsMissing, registrations })),

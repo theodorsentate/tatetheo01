@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Main } from '@/components/layout/main'
 import { PageHeader } from '@/components/burgee/marks'
+import { now as clockNow } from '@/lib/clock'
 
 const STATUS: Record<Boat['status'], { label: string; dot: string }> = {
   ready: { label: 'Ready', dot: 'bg-ok' },
@@ -27,7 +28,7 @@ export function AdminEquipment() {
   const [status, setStatus] = useState<'all' | Boat['status']>('all')
   const [adding, setAdding] = useState(false)
   const count = (st: Boat['status']) => boats.filter((b) => b.status === st).length
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const today = format(clockNow(), 'yyyy-MM-dd')
 
   return (
     <Main>
@@ -159,7 +160,7 @@ function AddBoatDialog({ open, onClose }: { open: boolean; onClose: () => void }
             const fd = new FormData(e.currentTarget)
             const name = String(fd.get('name') ?? '').trim()
             if (!name) return toast.error('Give the boat a name or sail number.')
-            add({ kind, name, status: 'ready', assignedTo: String(fd.get('assigned') ?? '').trim() || undefined, lastInspected: format(new Date(), 'yyyy-MM-dd') })
+            add({ kind, name, status: 'ready', assignedTo: String(fd.get('assigned') ?? '').trim() || undefined, lastInspected: format(clockNow(), 'yyyy-MM-dd') })
             toast.success(`${name} added`)
             onClose()
           }}

@@ -14,14 +14,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Main } from '@/components/layout/main'
 import { PageHeader } from '@/components/burgee/marks'
 import { ROLE_LABEL } from './staff'
+import { now as clockNow } from '@/lib/clock'
 
 /** Spreadsheet exports. Each builds a CSV from live data and hands it to the browser. */
 export function AdminReports() {
   const s = useStore()
   const look = useLookups()
-  const [sessionId, setSessionId] = useState('green-team-fall-26')
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const stamp = format(new Date(), 'yyyy-MM-dd')
+  const today = format(clockNow(), 'yyyy-MM-dd')
+  const [sessionId, setSessionId] = useState(() => s.sessions.find((x) => x.startDate <= today && x.endDate >= today)?.id ?? s.sessions[0].id)
+  const stamp = today
   const label = (sid: string) => {
     const se = look.session.get(sid)!
     return `${programById.get(se.programId)?.name}, ${se.name}`
@@ -97,16 +98,16 @@ export function AdminReports() {
     },
     {
       title: 'Season attendance',
-      body: 'Practices attended and missed for every sailor on a team this fall.',
+      body: 'Days attended and missed for every sailor this summer, week by week.',
       run: () => {
         const all = Object.values(s.attendance)
-        const rows: (string | number | undefined)[][] = [['Sailor', 'Team', 'Attended', 'Missed', 'Rate']]
-        for (const se of s.sessions.filter((x) => x.termId === 'fall-26')) {
-          const dates = practiceDates(se, new Date()).filter((d) => d < today)
+        const rows: (string | number | undefined)[][] = [['Sailor', 'Program', 'Week', 'Attended', 'Missed', 'Rate']]
+        for (const se of s.sessions.filter((x) => x.termId === 'summer-27' && x.startDate <= today)) {
+          const dates = practiceDates(se, clockNow()).filter((d) => d < today)
           for (const r of s.registrations.filter((x) => x.sessionId === se.id && x.status === 'confirmed')) {
             const k = look.sailor.get(r.sailorId)!
             const rec = attendanceRecord(all, k.id, se.id, dates)
-            rows.push([`${k.firstName} ${k.lastName}`, programById.get(se.programId)?.name, rec.attended, rec.missed, rec.rate === undefined ? '' : `${Math.round(rec.rate * 100)}%`])
+            rows.push([`${k.firstName} ${k.lastName}`, programById.get(se.programId)?.name, se.name, rec.attended, rec.missed, rec.rate === undefined ? '' : `${Math.round(rec.rate * 100)}%`])
           }
         }
         download('season-attendance', rows)
@@ -118,7 +119,7 @@ export function AdminReports() {
       run: () =>
         download('staff-certifications', [
           ['Staff', 'Role', 'Certification', 'Status', 'Expires'],
-          ...s.coaches.flatMap((c) => coachCertRows(c, CERT_TYPES, new Date(), s.settings.certWarningDays).map((r) => [c.name, ROLE_LABEL[c.role], r.certType.name, r.status, r.expires])),
+          ...s.coaches.flatMap((c) => coachCertRows(c, CERT_TYPES, clockNow(), s.settings.certWarningDays).map((r) => [c.name, ROLE_LABEL[c.role], r.certType.name, r.status, r.expires])),
         ]),
     },
     {
@@ -131,14 +132,14 @@ export function AdminReports() {
         ]),
     },
     {
-      title: 'Registrations & payments',
-      body: 'Every registration with status, price and amount paid, for the club treasurer.',
+      title: 'Registrations',
+      body: 'Every sailor and week with status, to check against your registration system.',
       run: () =>
         download('registrations', [
-          ['Sailor', 'Family', 'Session', 'Status', 'Registered', 'Price', 'Paid'],
+          ['Sailor', 'Family', 'Session', 'Status', 'Registered'],
           ...s.registrations.map((r) => {
             const k = look.sailor.get(r.sailorId)!
-            return [`${k.firstName} ${k.lastName}`, look.family.get(k.familyId)?.name, label(r.sessionId), r.status, r.createdAt.slice(0, 10), r.price, r.paid]
+            return [`${k.firstName} ${k.lastName}`, look.family.get(k.familyId)?.name, label(r.sessionId), r.status, r.createdAt.slice(0, 10)]
           }),
         ]),
     },

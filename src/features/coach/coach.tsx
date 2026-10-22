@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { format, isSameDay } from 'date-fns'
+import { addDays, format } from 'date-fns'
 import { Link } from '@tanstack/react-router'
 import { CERT_TYPES, FORM_TEMPLATES, PERSONAS } from '@/data/catalog'
 import { programById, termById, useLookups, useNow } from '@/data/hooks'
@@ -11,13 +11,12 @@ import {
   groupLoad,
   outstandingForms,
 } from '@/domain/rules'
-import type { Announcement, Group } from '@/domain/types'
+import type { Group } from '@/domain/types'
 import {
-  CalendarDays,
   ChevronRight,
   ClipboardX,
-  CloudLightning,
   HeartPulse,
+  MessageCircle,
   ShieldCheck,
   Upload,
 } from 'lucide-react'
@@ -36,6 +35,9 @@ import {
 } from '@/components/ui/sheet'
 import { CertStatusLabel, EmptyState } from '@/components/burgee/marks'
 import { CALL, Pennant } from '@/components/burgee/practice'
+import { useCoachRecipients } from '@/features/inbox/inbox'
+import { PhoneMessages } from '@/features/inbox/messages-screen'
+export { MessageList } from '@/features/inbox/message-list'
 
 function useCoach() {
   const coaches = useStore((s) => s.coaches)
@@ -46,6 +48,7 @@ export function CoachHome() {
   const coach = useCoach()
   const groups = useStore((s) => s.groups)
   const submissions = useStore((s) => s.submissions)
+  const dayNotes = useStore((s) => s.dayNotes)
   const season = useStore((s) => s.settings.season)
   const warn = useStore((s) => s.settings.certWarningDays)
   const look = useLookups()
@@ -55,14 +58,20 @@ export function CoachHome() {
     .filter((g) => g.coachIds.includes(coach.id))
     .map((g) => ({ g, s: look.session.get(g.sessionId)! }))
     .sort((a, b) => a.s.startDate.localeCompare(b.s.startDate))
-  const today = mine.filter(({ s }) => meetsOn(s, now))
-  const later = mine.filter(({ s }) => s.startDate > format(now, 'yyyy-MM-dd'))
+  // AM groups first, then PM.
+  const today = mine.filter(({ s }) => meetsOn(s, now)).sort((a, b) => (programById.get(a.s.programId)?.slot === 'PM' ? 1 : 0) - (programById.get(b.s.programId)?.slot === 'PM' ? 1 : 0))
+  const upcoming = mine.filter(({ s }) => s.startDate > format(now, 'yyyy-MM-dd'))
+  const weekOut = format(addDays(now, 8), 'yyyy-MM-dd')
+  const later = upcoming.filter(({ s }) => s.startDate <= weekOut)
+  const laterCount = upcoming.length - later.length
   const certRows = coachCertRows(coach, CERT_TYPES, now, warn)
   const certIssue = certRows.filter((r) => r.status !== 'valid')
 
+  const todayIso = format(now, 'yyyy-MM-dd')
   const alertsFor = (g: Group) => {
     const kids = g.sailorIds.map((id) => look.sailor.get(id)!).filter(Boolean)
     return {
+      notes: dayNotes.filter((d) => d.date === todayIso && g.sailorIds.includes(d.sailorId)).length,
       medical: kids.filter((k) => k.medicalAlerts.length).length,
       forms: kids.filter(
         (k) => outstandingForms(k, FORM_TEMPLATES, submissions, season).length
@@ -123,7 +132,7 @@ export function CoachHome() {
               <GroupCard
                 key={g.id}
                 group={g}
-                subtitle={s.time.split('·')[0].trim()}
+                subtitle={`${programById.get(s.programId)?.slot === 'PM' ? 'Afternoon' : 'Morning'}, ${s.time.split('·')[0].trim()}`}
                 alerts={alertsFor(g)}
                 featured
               />
@@ -134,7 +143,7 @@ export function CoachHome() {
 
       <section className='mt-6'>
         <h2 className='mb-2 text-sm font-semibold text-muted-foreground'>
-          Coming up
+          Next week
         </h2>
         <ul className='space-y-2'>
           {later.map(({ g, s }) => (
@@ -145,8 +154,9 @@ export function CoachHome() {
               alerts={alertsFor(g)}
             />
           ))}
-          {later.length === 0 && <EmptyState title='Nothing scheduled yet' />}
+          {later.length === 0 && <EmptyState title='Nothing scheduled next week' />}
         </ul>
+        {laterCount > 0 && <p className='mt-2 text-xs text-muted-foreground'>Plus {laterCount} more group{laterCount === 1 ? '' : 's'} later this summer.</p>}
       </section>
     </div>
   )
@@ -160,7 +170,7 @@ function GroupCard({
 }: {
   group: Group
   subtitle: string
-  alerts: { medical: number; forms: number }
+  alerts: { medical: number; forms: number; notes: number }
   featured?: boolean
 }) {
   const look = useLookups()
@@ -238,6 +248,11 @@ function GroupCard({
                 <span className='inline-flex items-center gap-1 text-signal'>
                   <ClipboardX className='size-3.5' /> {alerts.forms} missing
                   forms
+                </span>
+              )}
+              {featured && alerts.notes > 0 && (
+                <span className='inline-flex items-center gap-1 font-medium text-primary'>
+                  <MessageCircle className='size-3.5' /> {alerts.notes} parent note{alerts.notes === 1 ? '' : 's'} today
                 </span>
               )}
             </span>
@@ -376,64 +391,6 @@ export function CoachCerts() {
 }
 
 /** Announcements a family or a coach would have received. */
-export function MessageList({
-  items,
-  empty,
-}: {
-  items: Announcement[]
-  empty: string
-}) {
-  const [open, setOpen] = useState<string | null>(null)
-  if (!items.length) return <EmptyState title={empty} className='mx-4' />
-  return (
-    <ul className='divide-y'>
-      {items.map((a) => {
-        const expanded = open === a.id
-        return (
-          <li key={a.id}>
-            <button
-              className='w-full px-4 py-3 text-start'
-              onClick={() => setOpen(expanded ? null : a.id)}
-              aria-expanded={expanded}
-            >
-              <span className='flex items-start gap-2'>
-                {a.category === 'weather' ? (
-                  <CloudLightning
-                    className='mt-0.5 size-4 shrink-0 text-signal'
-                    aria-label='Weather'
-                  />
-                ) : (
-                  <CalendarDays
-                    className='mt-0.5 size-4 shrink-0 text-muted-foreground'
-                    aria-hidden='true'
-                  />
-                )}
-                <span className='min-w-0 flex-1'>
-                  <span className='block font-medium'>{a.title}</span>
-                  <span
-                    className={cn(
-                      'block text-sm text-muted-foreground',
-                      !expanded && 'line-clamp-2'
-                    )}
-                  >
-                    {a.body}
-                  </span>
-                  <span className='mt-1 block text-xs text-muted-foreground'>
-                    {a.sentBy},{' '}
-                    {isSameDay(new Date(a.sentAt), new Date())
-                      ? format(new Date(a.sentAt), 'h:mm a')
-                      : format(new Date(a.sentAt), 'MMM d')}
-                  </span>
-                </span>
-              </span>
-            </button>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
 export function CoachMessages() {
   const announcements = useStore((s) => s.announcements)
   const groups = useStore((s) => s.groups)
@@ -455,13 +412,14 @@ export function CoachMessages() {
           .find((g) => g.id === (a.audience as { groupId: string }).groupId)
           ?.coachIds.includes(PERSONAS.coachId))
   )
+  const coach = look.coach.get(PERSONAS.coachId)!
+  const recipients = useCoachRecipients(PERSONAS.coachId)
   return (
-    <div className='py-5'>
-      <h1 className='px-4 text-2xl font-semibold'>Messages</h1>
-      <p className='mb-3 px-4 text-sm text-muted-foreground'>
-        Staff notes and anything sent to your groups.
-      </p>
-      <MessageList items={items} empty='No messages yet' />
-    </div>
+    <PhoneMessages
+      me={{ id: `coach:${PERSONAS.coachId}`, name: coach.name }}
+      recipients={recipients}
+      updates={items}
+      intro='Parents of sailors in your groups, the director and staff updates.'
+    />
   )
 }

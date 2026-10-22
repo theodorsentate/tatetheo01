@@ -5,13 +5,13 @@ import { HeartPulse, Mail, MessageSquare, Phone } from 'lucide-react'
 import { FORM_TEMPLATES } from '@/data/catalog'
 import { familyRegs, programById, termById, useLookups, useWaitlistPosition } from '@/data/hooks'
 import { useStore } from '@/data/store'
-import { money } from '@/domain/pricing'
 import { latestSwimCheck } from '@/domain/attendance'
 import { ageOn, outstandingForms } from '@/domain/rules'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Main } from '@/components/layout/main'
 import { FleetChip, PageHeader, RegStatus } from '@/components/burgee/marks'
+import { now as clockNow } from '@/lib/clock'
 
 export function AdminFamilies({ familyId }: { familyId?: string }) {
   const navigate = useNavigate()
@@ -29,11 +29,10 @@ export function AdminFamilies({ familyId }: { familyId?: string }) {
         const kids = sailors.filter((s) => s.familyId === f.id)
         const fr = familyRegs(regs, sailors, f.id)
         const live = fr.filter((r) => r.status !== 'cancelled')
-        const balance = live.filter((r) => r.status === 'pending-payment').reduce((s, r) => s + r.price - r.paid, 0)
         const formsDue = live.length
           ? kids.reduce((s, k) => s + outstandingForms(k, FORM_TEMPLATES, submissions, season).length, 0)
           : 0
-        return { f, kids, registrations: live.length, balance, formsDue }
+        return { f, kids, registrations: live.length, formsDue }
       })
       .filter(({ f, kids }) =>
         `${f.name} ${f.guardians.map((g) => g.name).join(' ')} ${kids.map((k) => k.firstName).join(' ')}`.toLowerCase().includes(needle)
@@ -52,13 +51,13 @@ export function AdminFamilies({ familyId }: { familyId?: string }) {
               <th className='px-4 py-2 text-start font-medium'>Family</th>
               <th className='px-4 py-2 text-start font-medium'>Sailors</th>
               <th className='px-4 py-2 text-start font-medium'>Membership</th>
-              <th className='px-4 py-2 text-end font-medium'>Registrations</th>
+              <th className='px-4 py-2 text-start font-medium'>Phone</th>
+              <th className='px-4 py-2 text-end font-medium'>Weeks</th>
               <th className='px-4 py-2 text-end font-medium'>Forms due</th>
-              <th className='px-4 py-2 text-end font-medium'>Balance</th>
             </tr>
           </thead>
           <tbody className='divide-y'>
-            {rows.map(({ f, kids, registrations, balance, formsDue }) => (
+            {rows.map(({ f, kids, registrations, formsDue }) => (
               <tr key={f.id} className='cursor-pointer hover:bg-muted/40' onClick={() => navigate({ to: '/admin/families', search: { family: f.id } })}>
                 <td className='px-4 py-2.5'>
                   <Link to='/admin/families' search={{ family: f.id }} className='font-medium hover:underline'>
@@ -77,9 +76,9 @@ export function AdminFamilies({ familyId }: { familyId?: string }) {
                   </span>
                 </td>
                 <td className='px-4 py-2.5'>{f.membership === 'member' ? f.memberNumber : <span className='text-muted-foreground'>Non-member</span>}</td>
+                <td className='px-4 py-2.5 text-muted-foreground'>{f.guardians[0]?.phone}</td>
                 <td className='px-4 py-2.5 text-end'>{registrations}</td>
                 <td className='px-4 py-2.5 text-end'>{formsDue ? <span className='font-medium text-signal'>{formsDue}</span> : <span className='text-muted-foreground'>0</span>}</td>
-                <td className='px-4 py-2.5 text-end'>{balance ? money(balance) : <span className='text-muted-foreground'>—</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -147,7 +146,7 @@ function FamilySheet({ familyId, onClose }: { familyId?: string; onClose: () => 
                   <section key={k.id}>
                     <div className='mb-2 flex items-baseline justify-between gap-2'>
                       <h3 className='font-semibold'>
-                        {k.firstName}, {ageOn(k.dob, format(new Date(), 'yyyy-MM-dd'))}
+                        {k.firstName}, {ageOn(k.dob, format(clockNow(), 'yyyy-MM-dd'))}
                       </h3>
                       <FleetChip level={k.level} />
                     </div>

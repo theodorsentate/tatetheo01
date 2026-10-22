@@ -10,21 +10,12 @@ import type {
 
 export const TERMS: Term[] = [
   {
-    id: 'fall-26',
-    name: 'Fall 2026',
-    season: 'fall',
-    startDate: '2026-09-08',
-    endDate: '2026-11-21',
-    registrationOpens: '2026-07-15',
-  },
-  {
     id: 'spring-27',
     name: 'Spring 2027',
     season: 'spring',
-    startDate: '2027-03-02',
-    endDate: '2027-05-22',
-    registrationOpens: '2026-10-01',
-    earlyBirdUntil: '2026-12-15',
+    startDate: '2027-03-01',
+    endDate: '2027-05-21',
+    registrationOpens: '2026-12-01',
   },
   {
     id: 'summer-27',
@@ -32,11 +23,26 @@ export const TERMS: Term[] = [
     season: 'summer',
     startDate: '2027-06-14',
     endDate: '2027-08-06',
-    registrationOpens: '2026-10-01',
-    memberPriorityUntil: '2026-11-01',
-    earlyBirdUntil: '2027-01-31',
+    registrationOpens: '2027-01-15',
+    memberPriorityUntil: '2027-02-15',
+    earlyBirdUntil: '2027-03-31',
+  },
+  {
+    id: 'fall-27',
+    name: 'Fall 2027',
+    season: 'fall',
+    startDate: '2027-09-07',
+    endDate: '2027-11-20',
+    registrationOpens: '2027-07-01',
+    memberPriorityUntil: '2027-07-31',
+    earlyBirdUntil: '2027-08-15',
   },
 ]
+
+/** The term a date falls in, or the next one to start. */
+export function termOn(date: string): Term {
+  return TERMS.find((t) => date >= t.startDate && date <= t.endDate) ?? TERMS.find((t) => t.startDate > date) ?? TERMS[TERMS.length - 1]
+}
 
 const ALL_FORMS = ['waiver', 'medical', 'swim', 'photo']
 
@@ -51,11 +57,13 @@ export const PROGRAMS: Program[] = [
     minAge: 6,
     maxAge: 9,
     description:
-      'First time on the water. Rigging, capsize drills, steering and sailing a triangle in Optis. Half-day mornings.',
+      'First time on the water. Rigging, capsize drills, steering and sailing a triangle in Optis. Mornings.',
     pricingTierId: 'tier-lts',
     ratio: 6,
     color: '#0ea5e9',
     requiredFormIds: ALL_FORMS,
+    slot: 'AM',
+    planOwner: 'head-coach',
   },
   {
     id: 'green-camp',
@@ -66,11 +74,13 @@ export const PROGRAMS: Program[] = [
     minAge: 7,
     maxAge: 12,
     description:
-      'Bridge from learn-to-sail to racing. Starts, mark roundings and Green Fleet regatta prep. Full day.',
+      'Bridge from learn-to-sail to racing. Starts, mark roundings and Green Fleet regatta prep. Mornings.',
     pricingTierId: 'tier-camp',
     ratio: 8,
     color: '#16a34a',
     requiredFormIds: ALL_FORMS,
+    slot: 'AM',
+    planOwner: 'head-coach',
   },
   {
     id: 'rwb-camp',
@@ -81,11 +91,13 @@ export const PROGRAMS: Program[] = [
     minAge: 9,
     maxAge: 15,
     description:
-      'Red, White and Blue fleet racing. Boat speed, tactics, video debriefs and a Friday club regatta.',
+      'Red, White and Blue fleet racing. Boat speed, tactics, video debriefs and a Friday club regatta. Afternoons.',
     pricingTierId: 'tier-camp',
     ratio: 8,
     color: '#dc2626',
     requiredFormIds: ALL_FORMS,
+    slot: 'PM',
+    planOwner: 'each-coach',
   },
   {
     id: '420-camp',
@@ -96,11 +108,13 @@ export const PROGRAMS: Program[] = [
     minAge: 12,
     maxAge: 18,
     description:
-      'Doublehanded racing with spinnaker and trapeze. Skipper/crew pairing handled by coaches.',
+      'Doublehanded racing with spinnaker and trapeze. Skipper/crew pairing handled by coaches. Afternoons.',
     pricingTierId: 'tier-adv',
     ratio: 8,
     color: '#7c3aed',
     requiredFormIds: ALL_FORMS,
+    slot: 'PM',
+    planOwner: 'each-coach',
   },
   {
     id: 'ilca-camp',
@@ -111,11 +125,13 @@ export const PROGRAMS: Program[] = [
     minAge: 13,
     maxAge: 18,
     description:
-      'ILCA 4 / 6 singlehanded training. Fitness, downwind technique and starts. Alternating weeks.',
+      'ILCA 4 / 6 singlehanded training. Fitness, downwind technique and starts. Afternoons, alternating weeks.',
     pricingTierId: 'tier-adv',
     ratio: 8,
     color: '#ea580c',
     requiredFormIds: ALL_FORMS,
+    slot: 'PM',
+    planOwner: 'each-coach',
   },
   // ── Year-round teams ──
   {
@@ -305,15 +321,21 @@ export const FORM_TEMPLATES: FormTemplate[] = [
 export const DEFAULT_SETTINGS: ClubSettings = {
   clubName: 'Saltmarsh Bay Yacht Club',
   shortName: 'SBYC',
-  season: '2026–27',
+  season: '2027',
   supportEmail: 'juniors@saltmarshbay.example',
   certWarningDays: 45,
+  emergency: {
+    address: 'Saltmarsh Bay Yacht Club, 1 Harbor Point Rd, Charleston, SC (junior dock, gate B)',
+    vhf: 'Channel 72 (coach boats), 16 for the Coast Guard',
+    hospital: 'East Cooper Medical Center, 12 minutes by car',
+    harbormaster: '(843) 555-0199',
+  },
   waitlist: { memberPriority: true, autoOffer: true, holdHours: 48 },
   pricing: {
     tiers: [
       { id: 'tier-lts', name: 'Learn to Sail (half day)', unit: 'week', member: 325, nonMember: 425 },
-      { id: 'tier-camp', name: 'Opti camps (full day)', unit: 'week', member: 450, nonMember: 575 },
-      { id: 'tier-adv', name: '420 / ILCA camps', unit: 'week', member: 495, nonMember: 625 },
+      { id: 'tier-camp', name: 'Opti camps (half day)', unit: 'week', member: 375, nonMember: 475 },
+      { id: 'tier-adv', name: '420 / ILCA camps (half day)', unit: 'week', member: 425, nonMember: 535 },
       { id: 'tier-team', name: 'Race teams', unit: 'term', member: 1150, nonMember: 1450 },
     ],
     siblingDiscountPct: 10,
@@ -328,4 +350,7 @@ export const PERSONAS = {
   director: { name: 'Jordan Hale', title: 'Junior Program Director', email: 'jordan@saltmarshbay.example' },
   coachId: 'c-maya',
   familyId: 'f-calloway',
+  /** A 420 sailor with her own login. */
+  sailorId: 's-lucy',
+  committee: { name: 'Anne Whitmore', title: 'Junior Committee Chair' },
 }

@@ -27,7 +27,6 @@ import { cn } from '@/lib/utils'
 import { CERT_TYPES, FORM_TEMPLATES } from '@/data/catalog'
 import { programById, termById, useLookups, useNow, useSessionStats, useWaitlistPosition } from '@/data/hooks'
 import { useStore } from '@/data/store'
-import { money } from '@/domain/pricing'
 import {
   ageOn,
   coachCertRows,
@@ -36,7 +35,6 @@ import {
   outstandingForms,
 } from '@/domain/rules'
 import type { Group, Sailor } from '@/domain/types'
-import { waitlistFor } from '@/domain/waitlist'
 import { attendanceRecord, dayCounts, latestSwimCheck, practiceDates, STATUS_LABEL } from '@/domain/attendance'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -53,10 +51,8 @@ import { Main } from '@/components/layout/main'
 import {
   CertStatusLabel,
   EmptyState,
-  FillBar,
   FleetChip,
   Initials,
-  OfferCountdown,
   RegStatus,
 } from '@/components/burgee/marks'
 
@@ -100,7 +96,9 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
           </div>
         </div>
         <div className='flex items-center gap-4'>
-          <FillBar taken={st.taken} capacity={session.capacity} waitlist={st.waitlist} className='w-56' />
+          <span className='text-sm text-muted-foreground'>
+            <span className='font-semibold text-foreground'>{st.taken}</span> sailors{st.waitlist ? `, ${st.waitlist} on the waitlist` : ''}
+          </span>
           <Button asChild variant='outline'>
             <Link to='/admin/messages' search={{ session: session.id }}>
               <Megaphone className='size-4' /> Message families
@@ -112,17 +110,11 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
       <Tabs defaultValue='roster'>
         <TabsList>
           <TabsTrigger value='roster'>Groups & coaches</TabsTrigger>
-          <TabsTrigger value='waitlist'>
-            Waitlist{st.waitlist + st.offers > 0 ? ` (${st.waitlist + st.offers})` : ''}
-          </TabsTrigger>
           <TabsTrigger value='attendance'>Attendance</TabsTrigger>
-          <TabsTrigger value='registrations'>All registrations</TabsTrigger>
+          <TabsTrigger value='registrations'>Sailors</TabsTrigger>
         </TabsList>
         <TabsContent value='roster' className='mt-6'>
           <RosterBoard sessionId={session.id} />
-        </TabsContent>
-        <TabsContent value='waitlist' className='mt-6'>
-          <WaitlistPanel sessionId={session.id} />
         </TabsContent>
         <TabsContent value='attendance' className='mt-6'>
           <AttendancePanel sessionId={session.id} />
@@ -155,7 +147,6 @@ function RosterBoard({ sessionId }: { sessionId: string }) {
     .map((r) => look.sailor.get(r.sailorId)!)
   const grouped = new Set(groups.flatMap((g) => g.sailorIds))
   const unassigned = confirmed.filter((s) => !grouped.has(s.id))
-  const notPaid = regs.filter((r) => r.sessionId === sessionId && r.status === 'pending-payment').length
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor))
   const onDragEnd = (e: DragEndEvent) => {
@@ -173,7 +164,7 @@ function RosterBoard({ sessionId }: { sessionId: string }) {
       <div className='mb-4 flex flex-wrap items-center gap-2'>
         <p className='me-auto text-sm text-muted-foreground'>
           {confirmed.length} confirmed sailors in {groups.length || 'no'} group{groups.length === 1 ? '' : 's'}.
-          {notPaid > 0 && ` ${notPaid} more will appear once they pay.`} Drag sailors between groups, or use the menu on each card.
+          Drag sailors between groups, or use the menu on each card.
         </p>
         <Button
           variant={groups.length ? 'outline' : 'default'}
@@ -422,123 +413,11 @@ function SailorCard({
   )
 }
 
-/* ───────────────────────── Waitlist ───────────────────────── */
-
-function WaitlistPanel({ sessionId }: { sessionId: string }) {
-  const look = useLookups()
-  const regs = useStore((s) => s.registrations)
-  const sailors = useStore((s) => s.sailors)
-  const families = useStore((s) => s.families)
-  const settings = useStore((s) => s.settings.waitlist)
-  const offerSpot = useStore((s) => s.offerSpot)
-  const cancel = useStore((s) => s.cancelRegistration)
-  const now = useNow()
-  const offers = regs.filter((r) => r.sessionId === sessionId && r.status === 'offered')
-  const queue = waitlistFor(sessionId, regs, sailors, families, settings)
-
-  return (
-    <div className='grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]'>
-      <div className='space-y-6'>
-        {offers.length > 0 && (
-          <section>
-            <h3 className='mb-2 font-semibold'>Offers out</h3>
-            <ul className='divide-y rounded-lg border bg-card'>
-              {offers.map((r) => {
-                const s = look.sailor.get(r.sailorId)!
-                const f = look.family.get(s.familyId)!
-                return (
-                  <li key={r.id} className='flex flex-wrap items-center gap-3 px-4 py-3 text-sm'>
-                    <span className='min-w-0 flex-1'>
-                      <span className='font-medium'>
-                        {s.firstName} {s.lastName}
-                      </span>
-                      <span className='block text-xs text-muted-foreground'>
-                        {f.guardians[0].name}, {f.membership === 'member' ? 'member' : 'non-member'}
-                      </span>
-                    </span>
-                    {r.offerExpiresAt && <OfferCountdown expiresAt={r.offerExpiresAt} now={now} />}
-                    <Button
-                      size='sm'
-                      variant='ghost'
-                      onClick={() => {
-                        cancel(r.id)
-                        toast('Offer withdrawn. The next family in line was offered the seat.')
-                      }}
-                    >
-                      Withdraw
-                    </Button>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        )}
-        <section>
-          <h3 className='mb-2 font-semibold'>In line</h3>
-          {queue.length === 0 ? (
-            <EmptyState title='Nobody is waiting for this session' />
-          ) : (
-            <ol className='divide-y rounded-lg border bg-card'>
-              {queue.map((r, i) => {
-                const s = look.sailor.get(r.sailorId)!
-                const f = look.family.get(s.familyId)!
-                return (
-                  <li key={r.id} className='flex flex-wrap items-center gap-3 px-4 py-3 text-sm'>
-                    <span className='w-6 text-center font-display text-lg font-semibold text-muted-foreground'>{i + 1}</span>
-                    <span className='min-w-0 flex-1'>
-                      <span className='font-medium'>
-                        {s.firstName} {s.lastName}
-                      </span>
-                      <span className='block text-xs text-muted-foreground'>
-                        {f.membership === 'member' ? `Member ${f.memberNumber}` : 'Non-member'}, joined{' '}
-                        {format(new Date(r.createdAt), 'MMM d, h:mm a')}
-                      </span>
-                    </span>
-                    <span className='text-xs text-muted-foreground'>{money(r.price)}</span>
-                    <Button
-                      size='sm'
-                      variant='outline'
-                      onClick={() => {
-                        offerSpot(r.id)
-                        toast.success(`Offer sent to ${f.guardians[0].name}. Seat held ${settings.holdHours} hours.`)
-                      }}
-                    >
-                      Offer a spot
-                    </Button>
-                  </li>
-                )
-              })}
-            </ol>
-          )}
-        </section>
-      </div>
-      <aside className='rounded-lg border bg-card p-4 text-sm'>
-        <h3 className='font-semibold'>How this waitlist runs</h3>
-        <ul className='mt-2 list-disc space-y-1.5 ps-4 text-muted-foreground'>
-          <li>{settings.memberPriority ? 'Members go ahead of non-members, then first come, first served.' : 'Strictly first come, first served.'}</li>
-          <li>
-            {settings.autoOffer
-              ? `When a seat opens, the next family is offered it automatically and has ${settings.holdHours} hours to accept.`
-              : 'Seats are offered manually from this page.'}
-          </li>
-          <li>Unclaimed offers roll to the next family on their own.</li>
-        </ul>
-        <Button asChild variant='link' className='mt-2 h-auto p-0'>
-          <Link to='/admin/settings' search={{ tab: 'waitlist' }}>
-            Change waitlist rules
-          </Link>
-        </Button>
-      </aside>
-    </div>
-  )
-}
-
 function SessionRegistrations({ sessionId }: { sessionId: string }) {
   const look = useLookups()
   const regs = useStore((s) => s.registrations)
   const positions = useWaitlistPosition()
   const cancel = useStore((s) => s.cancelRegistration)
-  const confirm = useStore((s) => s.confirmRegistration)
   const [showCancelled, setShowCancelled] = useState(false)
   const list = regs
     .filter((r) => r.sessionId === sessionId && (showCancelled || r.status !== 'cancelled'))
@@ -556,7 +435,6 @@ function SessionRegistrations({ sessionId }: { sessionId: string }) {
               <th className='px-4 py-2 text-start font-medium'>Family</th>
               <th className='px-4 py-2 text-start font-medium'>Registered</th>
               <th className='px-4 py-2 text-start font-medium'>Status</th>
-              <th className='px-4 py-2 text-end font-medium'>Paid</th>
               <th className='px-4 py-2'>
                 <span className='sr-only'>Actions</span>
               </th>
@@ -584,15 +462,6 @@ function SessionRegistrations({ sessionId }: { sessionId: string }) {
                     <RegStatus status={r.status} position={positions.get(r.id)} />
                   </td>
                   <td className='px-4 py-2 text-end'>
-                    {money(r.paid)}
-                    <span className='text-muted-foreground'> / {money(r.price)}</span>
-                  </td>
-                  <td className='px-4 py-2 text-end'>
-                    {r.status === 'pending-payment' && (
-                      <Button size='sm' variant='ghost' onClick={() => confirm(r.id)}>
-                        Mark paid
-                      </Button>
-                    )}
                     {r.status !== 'cancelled' && (
                       <Button
                         size='sm'

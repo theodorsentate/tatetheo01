@@ -7,6 +7,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { now as clockNow } from '@/lib/clock'
 
 type DatePickerProps = {
   selected: Date | undefined
@@ -42,7 +43,7 @@ export function DatePicker({
           selected={selected}
           onSelect={onSelect}
           disabled={(date: Date) =>
-            date > new Date() || date < new Date('1900-01-01')
+            date > clockNow() || date < new Date('1900-01-01')
           }
         />
       </PopoverContent>

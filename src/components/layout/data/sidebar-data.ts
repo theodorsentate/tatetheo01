@@ -1,5 +1,5 @@
 import { type ElementType } from 'react'
-import { Anchor, CalendarDays, Contact, House, Megaphone, Sailboat } from 'lucide-react'
+import { Anchor, CalendarDays, ClipboardList, Contact, House, MessagesSquare, Sailboat } from 'lucide-react'
 
 /**
  * The director side has six sections. Each section's pages show as tabs at
@@ -27,10 +27,17 @@ export const SECTIONS: Section[] = [
       { title: 'Calendar', url: '/admin/calendar' },
       { title: 'Regattas', url: '/admin/regattas' },
       { title: 'Programs', url: '/admin/programs' },
-      { title: 'Registrations', url: '/admin/registrations' },
       { title: 'Attendance', url: '/admin/attendance' },
     ],
     match: ['/admin/sessions'],
+  },
+  {
+    id: 'registrations',
+    title: 'Registrations',
+    icon: ClipboardList,
+    url: '/admin/registrations',
+    tabs: [],
+    match: ['/admin/registrations'],
   },
   {
     id: 'sailors',
@@ -57,10 +64,11 @@ export const SECTIONS: Section[] = [
   {
     id: 'messages',
     title: 'Messages',
-    icon: Megaphone,
-    url: '/admin/messages',
+    icon: MessagesSquare,
+    url: '/admin/inbox',
     tabs: [
-      { title: 'Messages', url: '/admin/messages' },
+      { title: 'Inbox', url: '/admin/inbox' },
+      { title: 'Announcements', url: '/admin/messages' },
       { title: 'Forms & waivers', url: '/admin/forms' },
       { title: 'Incident reports', url: '/admin/incidents' },
     ],
@@ -72,7 +80,6 @@ export const SECTIONS: Section[] = [
     url: '/admin/equipment',
     tabs: [
       { title: 'Boats', url: '/admin/equipment' },
-      { title: 'Payments', url: '/admin/payments' },
       { title: 'Reports', url: '/admin/reports' },
       { title: 'Settings', url: '/admin/settings' },
     ],

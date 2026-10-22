@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { now as clockNow } from '@/lib/clock'
 
 export type CallStatus = PracticeCall['status']
 
@@ -72,7 +73,7 @@ export function PracticeCallDialog({
     setIds(initial.sessionIds)
     setNote(DEFAULT_NOTE[initial.status])
   }
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const today = format(clockNow(), 'yyyy-MM-dd')
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className='sm:max-w-md'>
